@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-electron/
+release/
+release-*/
+builder-debug.yml
+builder-effective-config.yaml
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
