@@ -53,6 +53,7 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     id: row.id as Column["id"],
     boardId: row.board_id as Column["boardId"],
     name: row.name,
+    color: row.color,
     orderIndex: row.order_index,
     createdAt: row.created_at,
     updatedAt: row.updated_at

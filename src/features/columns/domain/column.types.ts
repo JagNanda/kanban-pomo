@@ -7,8 +7,8 @@ export interface Column {
   id: ColumnId;
   boardId: BoardId;
   name: string;
+  color: string;
   orderIndex: number;
   createdAt: string;
   updatedAt: string;
 }
-

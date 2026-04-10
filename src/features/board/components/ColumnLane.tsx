@@ -11,6 +11,7 @@ interface ColumnLaneProps {
   taskCollectionsById: Map<string, TaskCollection>;
   selectedTaskId: TaskId | null;
   onDeleteColumn: (columnId: ColumnId) => void;
+  onEditColumn: (columnId: ColumnId) => void;
   onDeleteTask: (taskId: TaskId) => void;
   onReorderColumn: (sourceColumnId: ColumnId, targetColumnId: ColumnId) => void;
   onSelectTask: (taskId: TaskId) => void;
@@ -24,13 +25,14 @@ export const ColumnLane = ({
   taskCollectionsById,
   selectedTaskId,
   onDeleteColumn,
+  onEditColumn,
   onDeleteTask,
   onReorderColumn,
   onSelectTask,
   onMoveTask,
   onStartPomodoro
 }: ColumnLaneProps): JSX.Element => {
-  const theme = getColumnTheme(column.name, column.orderIndex);
+  const theme = getColumnTheme(column.name, column.orderIndex, column.color);
   const style = {
     "--column-accent": theme.accent,
     "--column-background": theme.background,
@@ -78,6 +80,13 @@ export const ColumnLane = ({
           <p className="subtle">{tasks.length} tasks</p>
         </div>
         <div className="column-header-actions">
+          <button
+            className="ghost-button"
+            onClick={() => onEditColumn(column.id)}
+            type="button"
+          >
+            Edit
+          </button>
           <button
             className="danger-button"
             onClick={() => onDeleteColumn(column.id)}

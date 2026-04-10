@@ -175,6 +175,15 @@ export const playPomodoroCompletionChime = async (
   phaseType: PomodoroPhaseType,
   chimeId: PomodoroChimeId
 ): Promise<void> => {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.desktop?.playPomodoroChime === "function" &&
+    document.visibilityState === "hidden"
+  ) {
+    await window.desktop.playPomodoroChime(chimeId);
+    return;
+  }
+
   const isReady = await ensurePomodoroAudioReady();
   const context = getAudioContext();
 

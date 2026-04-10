@@ -34,6 +34,7 @@ import type {
 import { normalizeImportKey } from "../../tasks/application/markdown-import";
 import { formatHoursFromSeconds, toIsoNow } from "../../../shared/lib/time";
 import type { BoardSnapshot } from "../../../lib/electron-api/board-snapshot";
+import { getDefaultColumnColor } from "../components/column-theme";
 
 export interface BoardViewState {
   board: ReturnType<typeof loadMockBoardState>["board"];
@@ -241,6 +242,7 @@ const ensureInDevColumnState = (
     id: createId("column") as ColumnId,
     boardId: current.board.id,
     name: "In Dev",
+    color: getDefaultColumnColor(current.columns.length),
     orderIndex: current.columns.length,
     createdAt: now,
     updatedAt: now
@@ -834,6 +836,7 @@ export const useBoardState = () => {
           id: createId("column") as ColumnId,
           boardId: current.board.id,
           name: `Column ${current.columns.length + 1}`,
+          color: getDefaultColumnColor(current.columns.length),
           orderIndex: current.columns.length,
           createdAt: now,
           updatedAt: now
@@ -922,6 +925,28 @@ export const useBoardState = () => {
           }))
         };
       });
+    },
+    updateColumn: (columnId: ColumnId, updates: { name: string; color: string }) => {
+      const trimmedName = updates.name.trim();
+      const normalizedColor = updates.color.trim();
+
+      if (trimmedName.length === 0 || !/^#[0-9a-fA-F]{6}$/.test(normalizedColor)) {
+        return;
+      }
+
+      updateState((current) => ({
+        ...current,
+        columns: current.columns.map((column) =>
+          column.id === columnId
+            ? {
+                ...column,
+                name: trimmedName,
+                color: normalizedColor,
+                updatedAt: toIsoNow()
+              }
+            : column
+        )
+      }));
     },
     createTask: ({
       columnId,

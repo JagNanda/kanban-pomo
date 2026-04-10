@@ -45,6 +45,7 @@ interface CalendarDayData {
 }
 
 type ReportCalendarDayDetails = CalendarDayData | null;
+type ReportBehindScheduleDetails = ReportTaskItem[] | null;
 
 interface TrendPoint {
   day: number;
@@ -504,6 +505,8 @@ export const ReportPage = ({
   const [viewMode, setViewMode] = useState<"calendar" | "graph">("calendar");
   const [selectedCalendarDay, setSelectedCalendarDay] =
     useState<ReportCalendarDayDetails>(null);
+  const [behindScheduleDetails, setBehindScheduleDetails] =
+    useState<ReportBehindScheduleDetails>(null);
   const reportTasks = useMemo(
     () => buildReportTaskItems(tasks, archivedCompletedTasks, taskCollections),
     [archivedCompletedTasks, taskCollections, tasks]
@@ -522,6 +525,26 @@ export const ReportPage = ({
   );
   const monthlyTaskSummary = useMemo(
     () => buildMonthlyTaskSummary(reportTasks.history, visibleMonth, new Date()),
+    [reportTasks.history, visibleMonth]
+  );
+  const behindScheduleTasks = useMemo(
+    () =>
+      reportTasks.history
+        .filter(
+          (task) =>
+            isTaskScheduledInMonth(task, visibleMonth) && isTaskOverdue(task, new Date())
+        )
+        .slice()
+        .sort((left, right) => {
+          const leftDue = left.estimatedCompletionDate ?? "9999-12-31";
+          const rightDue = right.estimatedCompletionDate ?? "9999-12-31";
+
+          if (leftDue !== rightDue) {
+            return leftDue.localeCompare(rightDue);
+          }
+
+          return compareTasks(left, right);
+        }),
     [reportTasks.history, visibleMonth]
   );
   const calendarDays = useMemo(
@@ -624,10 +647,14 @@ export const ReportPage = ({
             <span className="report-task-summary-label">Overdue Days Passed</span>
             <strong>{monthlyTaskSummary.overdueDaysTotal}</strong>
           </article>
-          <article className="report-task-summary-stat report-task-summary-stat--alert">
+          <button
+            className="report-task-summary-stat report-task-summary-stat--alert"
+            onClick={() => setBehindScheduleDetails(behindScheduleTasks)}
+            type="button"
+          >
             <span className="report-task-summary-label">Behind Schedule</span>
             <strong>{monthlyTaskSummary.behindScheduleCount} tasks</strong>
-          </article>
+          </button>
         </div>
       </section>
 
@@ -1021,6 +1048,63 @@ export const ReportPage = ({
                 )}
               </section>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {behindScheduleDetails ? (
+        <div
+          className="modal-overlay"
+          onClick={() => setBehindScheduleDetails(null)}
+          role="presentation"
+        >
+          <div
+            className="modal-card panel-card report-day-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Behind schedule tasks"
+          >
+            <div className="details-title">
+              <div>
+                <h3>Behind Schedule</h3>
+                <p>
+                  {formatMonthLabel(visibleMonth)} • {behindScheduleDetails.length} overdue task
+                  {behindScheduleDetails.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => setBehindScheduleDetails(null)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            {behindScheduleDetails.length > 0 ? (
+              <div className="report-day-modal-list">
+                {behindScheduleDetails.map((task) => (
+                  <button
+                    className="report-day-modal-item"
+                    key={`behind-${task.id}`}
+                    onClick={() => {
+                      if (task.taskId) {
+                        onOpenTask(task.taskId, task.completedAt ? "completed" : "default");
+                      }
+                    }}
+                    type="button"
+                  >
+                    <CollectionBadge color={getTaskBadgeColor(task)} compact name={task.title} />
+                    <span className="report-day-modal-meta">
+                      Due {task.estimatedCompletionDate ?? "Unplanned"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">No overdue tasks in this month.</div>
+            )}
           </div>
         </div>
       ) : null}

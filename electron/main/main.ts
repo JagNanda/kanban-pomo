@@ -1,4 +1,5 @@
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
@@ -12,13 +13,46 @@ const appUserModelId = "com.jag.kanbanpomo";
 const appDisplayName = "Kanban Pomo";
 const defaultZoomFactor = 0.76;
 
-const nativeChimePatternById: Record<PomodoroChimeId, number[]> = {
-  "bright-bells": [0, 130, 130],
-  "victory-ping": [0, 120, 120, 220],
-  "triple-rise": [0, 110, 170],
-  "soft-bloom": [0],
-  "gentle-glass": [0, 260],
-  "quiet-morning": [0, 360]
+interface NativeToneStep {
+  frequency: number;
+  durationMs: number;
+  pauseAfterMs?: number;
+}
+
+const nativeChimePatternById: Record<PomodoroChimeId, NativeToneStep[]> = {
+  "bright-bells": [
+    { frequency: 880, durationMs: 130, pauseAfterMs: 60 },
+    { frequency: 1174, durationMs: 150, pauseAfterMs: 70 },
+    { frequency: 1568, durationMs: 260 }
+  ],
+  "victory-ping": [
+    { frequency: 784, durationMs: 130, pauseAfterMs: 50 },
+    { frequency: 1046, durationMs: 150, pauseAfterMs: 55 },
+    { frequency: 1318, durationMs: 180, pauseAfterMs: 75 },
+    { frequency: 1760, durationMs: 280 }
+  ],
+  "triple-rise": [
+    { frequency: 988, durationMs: 120, pauseAfterMs: 45 },
+    { frequency: 1318, durationMs: 120, pauseAfterMs: 50 },
+    { frequency: 988, durationMs: 120, pauseAfterMs: 55 },
+    { frequency: 1760, durationMs: 260 }
+  ],
+  "soft-bloom": [
+    { frequency: 523, durationMs: 180, pauseAfterMs: 65 },
+    { frequency: 659, durationMs: 220, pauseAfterMs: 80 },
+    { frequency: 784, durationMs: 320 }
+  ],
+  "gentle-glass": [
+    { frequency: 392, durationMs: 220, pauseAfterMs: 70 },
+    { frequency: 523, durationMs: 280, pauseAfterMs: 90 },
+    { frequency: 659, durationMs: 340 }
+  ],
+  "quiet-morning": [
+    { frequency: 440, durationMs: 180, pauseAfterMs: 60 },
+    { frequency: 554, durationMs: 180, pauseAfterMs: 60 },
+    { frequency: 659, durationMs: 260, pauseAfterMs: 80 },
+    { frequency: 880, durationMs: 320 }
+  ]
 };
 
 const getWindowIconPath = (): string =>
@@ -26,21 +60,47 @@ const getWindowIconPath = (): string =>
     ? path.join(app.getAppPath(), "build", "icon.ico")
     : path.join(process.resourcesPath, "build", "icon.ico");
 
-const wait = (durationMs: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, durationMs);
+const runPowerShellScript = (script: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
+      (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      }
+    );
   });
 
 const playNativePomodoroChime = async (chimeId: PomodoroChimeId): Promise<void> => {
   const pattern = nativeChimePatternById[chimeId] ?? nativeChimePatternById["bright-bells"];
 
-  for (let index = 0; index < pattern.length; index += 1) {
-    const delayMs = pattern[index] ?? 0;
+  if (process.platform === "win32") {
+    const toneScript = pattern
+      .map((step) => {
+        const commands = [`[console]::Beep(${step.frequency}, ${step.durationMs})`];
 
-    if (delayMs > 0) {
-      await wait(delayMs);
+        if (step.pauseAfterMs && step.pauseAfterMs > 0) {
+          commands.push(`Start-Sleep -Milliseconds ${step.pauseAfterMs}`);
+        }
+
+        return commands.join("; ");
+      })
+      .join("; ");
+
+    try {
+      await runPowerShellScript(toneScript);
+      return;
+    } catch {
+      // Fall through to the generic system beep if tone playback is unavailable.
     }
+  }
 
+  for (let index = 0; index < pattern.length; index += 1) {
     shell.beep();
   }
 };
@@ -59,7 +119,8 @@ const createMainWindow = async (): Promise<void> => {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      backgroundThrottling: false
     }
   });
 

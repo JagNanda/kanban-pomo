@@ -37,7 +37,7 @@ export type TasksNavigationView =
   | { type: "completed-project"; projectId: TaskProjectId }
   | { type: "completed-collection"; collectionId: TaskCollectionId };
 
-type TaskView =
+export type TaskView =
   | { type: "today" }
   | { type: "tomorrow" }
   | { type: "month" }
@@ -106,6 +106,8 @@ interface TasksPageProps {
   fieldDefinitions: FieldDefinition[];
   taskFieldAssignments: TaskFieldAssignment[];
   taskFieldValues: TaskFieldValue[];
+  selectedView: TaskView;
+  onSelectedViewChange: (view: TaskView) => void;
   navigationIntent: TasksNavigationIntent | null;
   onConsumeNavigationIntent: (requestId: number) => void;
   actions: {
@@ -308,6 +310,8 @@ export const TasksPage = ({
   fieldDefinitions,
   taskFieldAssignments,
   taskFieldValues,
+  selectedView,
+  onSelectedViewChange,
   navigationIntent,
   onConsumeNavigationIntent,
   actions
@@ -325,7 +329,6 @@ export const TasksPage = ({
   const [composerErrors, setComposerErrors] = useState<MarkdownImportValidationError[]>([]);
   const [importFeedback, setImportFeedback] = useState<ImportFeedback>(null);
   const [isImportHelpOpen, setIsImportHelpOpen] = useState(false);
-  const [selectedView, setSelectedView] = useState<TaskView>({ type: "all" });
   const [taskSort, setTaskSort] = useState<TaskSortState | null>(null);
   const [openTreeMenu, setOpenTreeMenu] = useState<TreeMenuState>(null);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>(() =>
@@ -338,6 +341,7 @@ export const TasksPage = ({
   const projectNameInputRef = useRef<HTMLInputElement | null>(null);
   const collectionNameInputRef = useRef<HTMLInputElement | null>(null);
   const handledNavigationRequestRef = useRef<number | null>(null);
+  const setSelectedView = onSelectedViewChange;
 
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.id, column])),
@@ -1580,6 +1584,8 @@ export const TasksPage = ({
                   <span>Project title</span>
                   <input
                     autoFocus
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     ref={projectNameInputRef}
                     value={projectName}
                     onChange={(event) => setProjectName(event.target.value)}
@@ -1626,6 +1632,8 @@ export const TasksPage = ({
                   <span>Project title</span>
                   <input
                     autoFocus
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     ref={projectNameInputRef}
                     value={projectName}
                     onChange={(event) => setProjectName(event.target.value)}
@@ -1673,6 +1681,8 @@ export const TasksPage = ({
                   <span>Project</span>
                   <input
                     readOnly
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     value={
                       collectionProjectId
                         ? (taskProjectsById.get(collectionProjectId)?.name ?? "")
@@ -1685,6 +1695,8 @@ export const TasksPage = ({
                   <span>Collection title</span>
                   <input
                     autoFocus
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     ref={collectionNameInputRef}
                     value={collectionName}
                     onChange={(event) => setCollectionName(event.target.value)}
@@ -1732,6 +1744,8 @@ export const TasksPage = ({
                   <span>Project</span>
                   <input
                     readOnly
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     value={
                       collectionProjectId
                         ? (taskProjectsById.get(collectionProjectId)?.name ?? "")
@@ -1744,6 +1758,8 @@ export const TasksPage = ({
                   <span>Collection title</span>
                   <input
                     autoFocus
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     ref={collectionNameInputRef}
                     value={collectionName}
                     onChange={(event) => setCollectionName(event.target.value)}
@@ -1791,6 +1807,8 @@ export const TasksPage = ({
                   <label className="label-stack">
                     <span>Column</span>
                     <select
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={draft.columnId}
                       onChange={(event) =>
                         setDraft((current) => ({
@@ -1810,6 +1828,8 @@ export const TasksPage = ({
                   <label className="label-stack">
                     <span>Project</span>
                     <select
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={draft.taskProjectId}
                       onChange={(event) =>
                         setDraft((current) => {
@@ -1847,6 +1867,8 @@ export const TasksPage = ({
                   <label className="label-stack">
                     <span>Collection</span>
                     <select
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={draft.taskCollectionId}
                       onChange={(event) =>
                         setDraft((current) => {
@@ -1880,6 +1902,8 @@ export const TasksPage = ({
                   <label className="label-stack">
                     <span>Title</span>
                     <input
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={draft.title}
                       onChange={(event) =>
                         setDraft((current) => ({ ...current, title: event.target.value }))
@@ -1891,6 +1915,8 @@ export const TasksPage = ({
                     <span>Description</span>
                     <textarea
                       className="text-area"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       rows={4}
                       value={draft.description}
                       onChange={(event) =>
@@ -1906,6 +1932,8 @@ export const TasksPage = ({
                     <label className="label-stack">
                       <span>Priority</span>
                       <select
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
                         value={draft.priority}
                         onChange={(event) =>
                           setDraft((current) => ({
@@ -1938,6 +1966,8 @@ export const TasksPage = ({
                     <span>Estimated Pomodoros</span>
                     <input
                       min={0}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       placeholder="0"
                       type="number"
                       value={draft.estimatedPomodoros}
@@ -2004,6 +2034,8 @@ export const TasksPage = ({
                   <textarea
                     autoFocus
                     className="text-area import-composer-textarea"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
                     rows={18}
                     spellCheck={false}
                     value={composerMarkdown}

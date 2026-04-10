@@ -23,6 +23,7 @@ export const demoColumnRows: ColumnRow[] = [
     id: "column_backlog",
     board_id: "board_main",
     name: "Not Yet Started",
+    color: "#f091c5",
     order_index: 0,
     created_at: createdAt,
     updated_at: createdAt
@@ -31,6 +32,7 @@ export const demoColumnRows: ColumnRow[] = [
     id: "column_dev",
     board_id: "board_main",
     name: "In Dev",
+    color: "#de9a34",
     order_index: 1,
     created_at: createdAt,
     updated_at: createdAt
@@ -39,6 +41,7 @@ export const demoColumnRows: ColumnRow[] = [
     id: "column_review",
     board_id: "board_main",
     name: "Code Review",
+    color: "#48c4d9",
     order_index: 2,
     created_at: createdAt,
     updated_at: createdAt
@@ -47,6 +50,7 @@ export const demoColumnRows: ColumnRow[] = [
     id: "column_done",
     board_id: "board_main",
     name: "Completed",
+    color: "#8b74ea",
     order_index: 3,
     created_at: createdAt,
     updated_at: createdAt

@@ -25,8 +25,8 @@ const insertBoard = `
 `;
 
 const insertColumn = `
-  INSERT INTO columns (id, board_id, name, order_index, created_at, updated_at)
-  VALUES (@id, @board_id, @name, @order_index, @created_at, @updated_at)
+  INSERT INTO columns (id, board_id, name, color, order_index, created_at, updated_at)
+  VALUES (@id, @board_id, @name, @color, @order_index, @created_at, @updated_at)
 `;
 
 const insertTask = `
@@ -161,12 +161,13 @@ export class AppDatabase {
 
     const columns = this.db
       .prepare(
-        "SELECT id, board_id, name, order_index, created_at, updated_at FROM columns ORDER BY order_index ASC"
+        "SELECT id, board_id, name, color, order_index, created_at, updated_at FROM columns ORDER BY order_index ASC"
       )
       .all() as Array<{
       id: string;
       board_id: string;
       name: string;
+      color: string;
       order_index: number;
       created_at: string;
       updated_at: string;
@@ -368,6 +369,7 @@ export class AppDatabase {
         id: row.id as BoardSnapshot["columns"][number]["id"],
         boardId: row.board_id as BoardSnapshot["columns"][number]["boardId"],
         name: row.name as string,
+        color: row.color as string,
         orderIndex: row.order_index as number,
         createdAt: row.created_at as string,
         updatedAt: row.updated_at as string
@@ -553,6 +555,7 @@ export class AppDatabase {
           id: column.id,
           board_id: column.boardId,
           name: column.name,
+          color: column.color,
           order_index: column.orderIndex,
           created_at: column.createdAt,
           updated_at: column.updatedAt
@@ -769,6 +772,7 @@ export class AppDatabase {
         id TEXT PRIMARY KEY,
         board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT '#8f99b1',
         order_index INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -912,6 +916,10 @@ export class AppDatabase {
       .prepare("PRAGMA table_info(tasks)")
       .all() as Array<{ name: string }>;
     const existingColumnNames = new Set(columns.map((column) => column.name));
+    const boardColumns = this.db
+      .prepare("PRAGMA table_info(columns)")
+      .all() as Array<{ name: string }>;
+    const existingBoardColumnNames = new Set(boardColumns.map((column) => column.name));
     const taskCollectionColumns = this.db
       .prepare("PRAGMA table_info(task_collections)")
       .all() as Array<{ name: string }>;
@@ -945,6 +953,10 @@ export class AppDatabase {
 
     if (!existingColumnNames.has("completed_at")) {
       this.db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
+    }
+
+    if (!existingBoardColumnNames.has("color")) {
+      this.db.exec("ALTER TABLE columns ADD COLUMN color TEXT NOT NULL DEFAULT '#8f99b1'");
     }
 
     if (!existingTaskCollectionColumnNames.has("task_project_id")) {

@@ -25,6 +25,7 @@ interface BoardScreenProps {
     addColumn: () => void;
     deleteColumn: (columnId: ColumnId) => void;
     reorderColumns: (sourceColumnId: ColumnId, targetColumnId: ColumnId) => void;
+    updateColumn: (columnId: ColumnId, updates: { name: string; color: string }) => void;
     createTask: (input: CreateTaskInput) => void;
     assignTaskToProject: (taskId: TaskId, taskProjectId: TaskProjectId | null) => void;
     assignTaskToCollection: (taskId: TaskId, taskCollectionId: TaskCollectionId | null) => void;
@@ -63,6 +64,12 @@ interface CreateTaskDraft {
   taskCollectionId: TaskCollectionId | "";
   estimatedCompletionDate: string;
   estimatedPomodoros: string;
+}
+
+interface EditColumnDraft {
+  columnId: ColumnId;
+  name: string;
+  color: string;
 }
 
 const getTodaySummary = (state: BoardViewState) => {
@@ -120,6 +127,7 @@ export const BoardScreen = ({
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldType, setNewFieldType] = useState<FieldType>("text");
   const [newFieldScope, setNewFieldScope] = useState<FieldScope>("global");
+  const [editColumnDraft, setEditColumnDraft] = useState<EditColumnDraft | null>(null);
   const [draft, setDraft] = useState<CreateTaskDraft>(() =>
     createDefaultTaskDraft(state.columns[0]?.id ?? "")
   );
@@ -184,16 +192,34 @@ export const BoardScreen = ({
       taskProjectId: firstProject?.id ?? "",
       taskCollectionId: firstCollection?.id ?? ""
     });
+    setEditColumnDraft(null);
     setModalState("create-task");
   };
 
   const openTaskModal = (taskId: TaskId): void => {
     actions.selectTask(taskId);
+    setEditColumnDraft(null);
     setModalState("edit-task");
+  };
+
+  const openEditColumnModal = (columnId: ColumnId): void => {
+    const column = state.columns.find((candidate) => candidate.id === columnId);
+
+    if (!column) {
+      return;
+    }
+
+    setModalState(null);
+    setEditColumnDraft({
+      columnId: column.id,
+      name: column.name,
+      color: column.color
+    });
   };
 
   const closeModal = (): void => {
     setModalState(null);
+    setEditColumnDraft(null);
   };
 
   const handleDeleteTaskById = (taskId: TaskId): void => {
@@ -255,6 +281,18 @@ export const BoardScreen = ({
     setNewFieldName("");
     setNewFieldType("text");
     setNewFieldScope("global");
+  };
+
+  const handleUpdateColumn = (): void => {
+    if (!editColumnDraft) {
+      return;
+    }
+
+    actions.updateColumn(editColumnDraft.columnId, {
+      name: editColumnDraft.name,
+      color: editColumnDraft.color
+    });
+    setEditColumnDraft(null);
   };
 
   return (
@@ -321,6 +359,7 @@ export const BoardScreen = ({
                   actions.deleteColumn(columnId);
                 }
               }}
+              onEditColumn={openEditColumnModal}
               onSelectTask={openTaskModal}
               onMoveTask={actions.moveTask}
               onReorderColumn={actions.reorderColumns}
@@ -330,7 +369,7 @@ export const BoardScreen = ({
           ))}
       </div>
 
-      {modalState !== null ? (
+      {modalState !== null || editColumnDraft !== null ? (
         <div
           className="modal-overlay"
           onClick={closeModal}
@@ -528,6 +567,84 @@ export const BoardScreen = ({
                     type="button"
                   >
                     Create task
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
+            {editColumnDraft ? (
+              <section className="panel-stack">
+                <div className="modal-header">
+                  <div>
+                    <h3>Edit Column</h3>
+                    <p className="subtle">Rename this lane and choose its board color.</p>
+                  </div>
+                  <button className="ghost-button" onClick={closeModal} type="button">
+                    Close
+                  </button>
+                </div>
+
+                <div className="task-details-form">
+                  <label className="label-stack">
+                    <span>Column name</span>
+                    <input
+                      autoFocus
+                      value={editColumnDraft.name}
+                      onChange={(event) =>
+                        setEditColumnDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                name: event.target.value
+                              }
+                            : current
+                        )
+                      }
+                    />
+                  </label>
+
+                  <label className="label-stack">
+                    <span>Column color</span>
+                    <div className="column-color-field">
+                      <input
+                        className="column-color-input"
+                        type="color"
+                        value={editColumnDraft.color}
+                        onChange={(event) =>
+                          setEditColumnDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  color: event.target.value
+                                }
+                              : current
+                          )
+                        }
+                      />
+                      <input
+                        value={editColumnDraft.color}
+                        onChange={(event) =>
+                          setEditColumnDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  color: event.target.value
+                                }
+                              : current
+                          )
+                        }
+                        placeholder="#8b74ea"
+                      />
+                    </div>
+                  </label>
+                </div>
+
+                <div className="modal-footer">
+                  <button className="ghost-button" onClick={closeModal} type="button">
+                    Cancel
+                  </button>
+                  <button className="primary-button" onClick={handleUpdateColumn} type="button">
+                    Save column
                   </button>
                 </div>
               </section>

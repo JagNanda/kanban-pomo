@@ -130,6 +130,8 @@ export const PomodoroPanel = ({
   onInterrupt,
   onSkipBreak
 }: PomodoroPanelProps): JSX.Element => {
+  const phaseTone = getPhaseTone(timerState);
+  const phaseLabel = getPhaseLabel(timerState);
   const todayFocusSeconds = allPomodoroSessions
     .filter((session) => isToday(session.startedAt))
     .reduce((sum, session) => sum + session.actualDurationSeconds, 0);
@@ -161,7 +163,11 @@ export const PomodoroPanel = ({
     .slice(0, 4);
 
   return (
-    <section className="focus-shell">
+    <section
+      className={`focus-shell focus-shell--${phaseTone}${
+        timerState.status === "paused" ? " is-paused" : ""
+      }`}
+    >
       <div className="focus-primary">
         <div className="focus-select-panel">
           <label className="focus-select-wrap focus-select-wrap--full">
@@ -186,10 +192,10 @@ export const PomodoroPanel = ({
           <div className="focus-ring-wrap">
             <SegmentedTimerRing
               progress={getTimerProgress(timerState, config)}
-              tone={getPhaseTone(timerState)}
+              tone={phaseTone}
             />
             <div className="focus-timer-center">
-              <span className="timer-phase">{getPhaseLabel(timerState)}</span>
+              <span className="timer-phase">{phaseLabel}</span>
               <strong className="timer-readout timer-readout--giant">
                 {describeTimerState(timerState, config)}
               </strong>

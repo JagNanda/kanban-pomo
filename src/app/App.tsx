@@ -5,6 +5,7 @@ import { ReportPage } from "../features/report/components/ReportPage";
 import {
   TasksPage,
   type TasksNavigationIntent,
+  type TaskView,
   type TasksNavigationView
 } from "../features/tasks/components/TasksPage";
 import { useBoardState } from "../features/board/application/useBoardState";
@@ -16,6 +17,7 @@ type AppPage = "board" | "tasks" | "focus" | "report";
 export const App = (): JSX.Element => {
   const boardState = useBoardState();
   const [currentPage, setCurrentPage] = useState<AppPage>("tasks");
+  const [tasksSelectedView, setTasksSelectedView] = useState<TaskView>({ type: "all" });
   const [tasksNavigationIntent, setTasksNavigationIntent] =
     useState<TasksNavigationIntent | null>(null);
   const completedColumnId =
@@ -199,6 +201,8 @@ export const App = (): JSX.Element => {
             fieldDefinitions={boardState.state.fieldDefinitions}
             taskFieldAssignments={boardState.state.taskFieldAssignments}
             taskFieldValues={boardState.state.taskFieldValues}
+            selectedView={tasksSelectedView}
+            onSelectedViewChange={setTasksSelectedView}
             navigationIntent={tasksNavigationIntent}
             onConsumeNavigationIntent={(requestId) =>
               setTasksNavigationIntent((current) =>

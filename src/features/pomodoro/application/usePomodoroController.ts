@@ -53,6 +53,15 @@ const getPlannedDurationForPhase = (
   return config.longBreakDurationSeconds;
 };
 
+const getRemainingSecondsFromEndsAt = (endsAt: string): number =>
+  Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000));
+
+const getElapsedSecondsFromStartedAt = (startedAt: string, endedAt: string): number =>
+  Math.max(
+    0,
+    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
+  );
+
 export const usePomodoroController = ({
   onWorkSessionCompleted,
   onWorkSessionInterrupted,
@@ -144,10 +153,12 @@ export const usePomodoroController = ({
           return current;
         }
 
-        if (current.secondsRemaining > 1) {
+        const nextSecondsRemaining = getRemainingSecondsFromEndsAt(current.endsAt);
+
+        if (nextSecondsRemaining > 0) {
           return {
             ...current,
-            secondsRemaining: current.secondsRemaining - 1
+            secondsRemaining: nextSecondsRemaining
           };
         }
 
@@ -191,15 +202,8 @@ export const usePomodoroController = ({
         );
 
         return {
-          status: "running",
+          status: "idle",
           taskId: current.taskId,
-          phaseType: "work",
-          startedAt: endedAt,
-          endsAt: new Date(
-            Date.now() + config.workDurationSeconds * 1000
-          ).toISOString(),
-          secondsRemaining: config.workDurationSeconds,
-          cycleWorkSessionIndex: current.cycleWorkSessionIndex
         };
       });
     }, 1000);
@@ -232,7 +236,7 @@ export const usePomodoroController = ({
           status: "paused",
           taskId: current.taskId,
           phaseType: current.phaseType,
-          remainingSeconds: current.secondsRemaining,
+          remainingSeconds: getRemainingSecondsFromEndsAt(current.endsAt),
           cycleWorkSessionIndex: current.cycleWorkSessionIndex,
           startedAt: current.startedAt
         };
@@ -299,7 +303,7 @@ export const usePomodoroController = ({
         );
         const actualDurationSeconds =
           current.status === "running"
-            ? plannedDurationSeconds - current.secondsRemaining
+            ? getElapsedSecondsFromStartedAt(current.startedAt, endedAt)
             : plannedDurationSeconds - current.remainingSeconds;
 
         if (current.phaseType === "work") {
@@ -345,7 +349,7 @@ export const usePomodoroController = ({
         );
         const actualDurationSeconds =
           current.status === "running"
-            ? plannedDurationSeconds - current.secondsRemaining
+            ? getElapsedSecondsFromStartedAt(current.startedAt, endedAt)
             : plannedDurationSeconds - current.remainingSeconds;
 
         onBreakRecorded(

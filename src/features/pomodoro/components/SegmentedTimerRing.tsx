@@ -15,6 +15,9 @@ export const SegmentedTimerRing = ({
 
   return (
     <div className={`timer-ring timer-ring--${tone}`} aria-hidden="true">
+      <span className="timer-ring-halo timer-ring-halo--outer" />
+      <span className="timer-ring-halo timer-ring-halo--inner" />
+      <span className="timer-ring-core" />
       {Array.from({ length: totalSegments }).map((_, index) => (
         <span
           key={index}

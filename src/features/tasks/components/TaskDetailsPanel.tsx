@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type {
   FieldDefinition,
   TaskFieldValue
@@ -65,6 +66,23 @@ export const TaskDetailsPanel = ({
   onUpdateFieldValue,
   onDeleteTask
 }: TaskDetailsPanelProps): JSX.Element => {
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const focusTarget = titleInputRef.current;
+
+    if (!focusTarget) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      focusTarget.focus();
+      focusTarget.select();
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [task?.id]);
+
   if (!task) {
     return (
       <section className="panel-card">
@@ -119,6 +137,9 @@ export const TaskDetailsPanel = ({
         <label className="label-stack">
           <span>Title</span>
           <input
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            ref={titleInputRef}
             value={task.title}
             onChange={(event) => onUpdateTitle(task.id, event.target.value)}
           />
@@ -128,6 +149,8 @@ export const TaskDetailsPanel = ({
           <span>Description</span>
           <textarea
             className="text-area"
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
             rows={4}
             value={task.description}
             onChange={(event) => onUpdateDescription(task.id, event.target.value)}
@@ -138,6 +161,8 @@ export const TaskDetailsPanel = ({
           <label className="label-stack">
             <span>Status</span>
             <select
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               value={task.columnId}
               onChange={(event) => onUpdateStatus(task.id, event.target.value as ColumnId)}
             >
@@ -152,6 +177,8 @@ export const TaskDetailsPanel = ({
           <label className="label-stack">
             <span>Project</span>
             <select
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               value={task.taskProjectId ?? ""}
               onChange={(event) =>
                 onUpdateTaskProject(
@@ -171,6 +198,8 @@ export const TaskDetailsPanel = ({
           <label className="label-stack">
             <span>Collection</span>
             <select
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               value={task.taskCollectionId ?? ""}
               onChange={(event) =>
                 onUpdateTaskCollection(
@@ -190,6 +219,8 @@ export const TaskDetailsPanel = ({
           <label className="label-stack">
             <span>Priority</span>
             <select
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               value={task.priority}
               onChange={(event) =>
                 onUpdatePriority(task.id, event.target.value as TaskPriority)
@@ -215,6 +246,8 @@ export const TaskDetailsPanel = ({
             <span>Estimated Pomodoros</span>
             <input
               min={0}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               placeholder="0"
               type="number"
               value={task.estimatedPomodoros === 0 ? "" : String(task.estimatedPomodoros)}
@@ -231,6 +264,8 @@ export const TaskDetailsPanel = ({
             <span>Completed Pomodoros</span>
             <input
               min={0}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               placeholder="0"
               type="number"
               value={task.pomodoroCount === 0 ? "" : String(task.pomodoroCount)}
@@ -277,6 +312,8 @@ export const TaskDetailsPanel = ({
 
                   {definition.type === "text" ? (
                     <input
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={existingValue?.type === "text" ? existingValue.value : ""}
                       onChange={(event) =>
                         onUpdateFieldValue(task.id, definition.id, event.target.value)
@@ -286,6 +323,8 @@ export const TaskDetailsPanel = ({
 
                   {definition.type === "number" ? (
                     <input
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       type="number"
                       value={
                         existingValue?.type === "number"
@@ -304,6 +343,8 @@ export const TaskDetailsPanel = ({
 
                   {definition.type === "boolean" ? (
                     <select
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
                       value={
                         existingValue?.type === "boolean" && existingValue.value
                           ? "true"
