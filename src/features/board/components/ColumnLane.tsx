@@ -17,6 +17,7 @@ interface ColumnLaneProps {
   onSelectTask: (taskId: TaskId) => void;
   onMoveTask: (taskId: TaskId, targetColumnId: ColumnId) => void;
   onStartPomodoro: (taskId: TaskId) => void;
+  onCreateTask: (columnId: ColumnId) => void;
 }
 
 export const ColumnLane = ({
@@ -30,7 +31,8 @@ export const ColumnLane = ({
   onReorderColumn,
   onSelectTask,
   onMoveTask,
-  onStartPomodoro
+  onStartPomodoro,
+  onCreateTask
 }: ColumnLaneProps): JSX.Element => {
   const theme = getColumnTheme(column.name, column.orderIndex, column.color);
   const style = {
@@ -73,33 +75,72 @@ export const ColumnLane = ({
         }}
       >
         <div>
-          <h3>
-            <span className="column-dot" />
-            {column.name}
-          </h3>
-          <p className="subtle">{tasks.length} tasks</p>
+          <div className="column-title-row">
+            <h3>
+              <span className="column-dot" />
+              {column.name}
+            </h3>
+            <span className="column-count">{tasks.length}</span>
+          </div>
         </div>
-        <div className="column-header-actions">
-          <button
-            className="ghost-button"
-            onClick={() => onEditColumn(column.id)}
-            type="button"
+        <details
+          className="column-menu"
+          onClick={(event) => event.stopPropagation()}
+          onDragStart={(event) => event.preventDefault()}
+        >
+          <summary
+            aria-label={`Column actions for ${column.name}`}
+            className="column-menu-trigger"
           >
-            Edit
-          </button>
-          <button
-            className="danger-button"
-            onClick={() => onDeleteColumn(column.id)}
-            type="button"
-          >
-            Delete
-          </button>
-        </div>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="1.8" />
+              <circle cx="12" cy="12" r="1.8" />
+              <circle cx="12" cy="19" r="1.8" />
+            </svg>
+          </summary>
+          <div className="column-menu-panel">
+            <button onClick={() => onEditColumn(column.id)} type="button">
+              Edit column
+            </button>
+            <button
+              className="column-menu-danger"
+              onClick={() => onDeleteColumn(column.id)}
+              type="button"
+            >
+              Delete column
+            </button>
+          </div>
+        </details>
       </div>
 
       <div className="column-body">
         {tasks.length === 0 ? (
-          <div className="empty-state">Drop a task here or create a new one.</div>
+          <div className="empty-state">
+            <svg className="empty-state-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 9.5h14" />
+              <path d="M7.5 6h9l2.5 3.5v7A1.5 1.5 0 0 1 17.5 18h-11A1.5 1.5 0 0 1 5 16.5v-7L7.5 6Z" />
+              <path d="M9 13h6" />
+            </svg>
+            <span>
+              Drop a task here
+              <br />
+              or create a new one.
+            </span>
+            <button
+              className="empty-state-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCreateTask(column.id);
+              }}
+              type="button"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              Add task
+            </button>
+          </div>
         ) : (
           tasks.map((task) => (
             <TaskCard

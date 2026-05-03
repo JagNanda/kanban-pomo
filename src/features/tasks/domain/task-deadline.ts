@@ -8,6 +8,14 @@ const toLocalDayStart = (value: Date): Date =>
 
 const toDateOnlyLocal = (value: string): Date => new Date(`${value}T00:00:00`);
 
+const toDateOnlyValue = (value: Date): string => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 const getDayDiff = (later: Date, earlier: Date): number =>
   Math.max(
     0,
@@ -19,6 +27,13 @@ export const getTaskDueDate = (task: TaskDeadlineLike): Date | null =>
 
 export const getTaskCompletionDate = (task: TaskDeadlineLike): Date | null =>
   task.completedAt ? new Date(task.completedAt) : null;
+
+export const shiftDateOnlyValue = (value: string, dayCount: number): string => {
+  const shiftedDate = toDateOnlyLocal(value);
+  shiftedDate.setDate(shiftedDate.getDate() + dayCount);
+
+  return toDateOnlyValue(shiftedDate);
+};
 
 export const isTaskOverdue = (
   task: TaskDeadlineLike,

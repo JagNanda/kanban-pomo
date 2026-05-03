@@ -54,6 +54,7 @@ interface BoardScreenProps {
 }
 
 type ModalState = "create-task" | "column-fields" | "edit-task" | null;
+type BoardProjectFilter = TaskProjectId | "all";
 
 interface CreateTaskDraft {
   columnId: ColumnId | "";
@@ -72,23 +73,38 @@ interface EditColumnDraft {
   color: string;
 }
 
-const getTodaySummary = (state: BoardViewState) => {
-  const completedColumn = state.columns.find((column) =>
+type TodayStatKind = "estimated" | "tasks" | "elapsed" | "completed";
+
+interface TodayStatCard {
+  kind: TodayStatKind;
+  label: string;
+  tone: "blue" | "violet" | "amber" | "green";
+  value: string;
+}
+
+const getTodaySummary = ({
+  columns,
+  pomodoroSessions,
+  tasks
+}: Pick<BoardViewState, "columns" | "pomodoroSessions" | "tasks">) => {
+  const completedColumn = columns.find((column) =>
     ["completed", "done"].includes(column.name.trim().toLowerCase())
   );
 
   const completedTasks = completedColumn
-    ? state.tasks.filter((task) => task.columnId === completedColumn.id)
+    ? tasks.filter((task) => task.columnId === completedColumn.id)
     : [];
 
-  const openTasks = state.tasks.filter((task) => task.columnId !== completedColumn?.id);
+  const openTasks = tasks.filter((task) => task.columnId !== completedColumn?.id);
+  const taskIds = new Set(tasks.map((task) => task.id));
 
-  const todayPomodoroSeconds = state.pomodoroSessions
+  const todayPomodoroSeconds = pomodoroSessions
     .filter((session) => {
       const now = new Date();
       const startedAt = new Date(session.startedAt);
 
       return (
+        taskIds.has(session.taskId) &&
         startedAt.getFullYear() === now.getFullYear() &&
         startedAt.getMonth() === now.getMonth() &&
         startedAt.getDate() === now.getDate()
@@ -118,6 +134,80 @@ const createDefaultTaskDraft = (columnId: ColumnId | ""): CreateTaskDraft => ({
   estimatedPomodoros: ""
 });
 
+const TodayStatIcon = ({ kind }: { kind: TodayStatKind }): JSX.Element => {
+  switch (kind) {
+    case "estimated":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v5l3.5 2.1" />
+        </svg>
+      );
+    case "tasks":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M9 7h10" />
+          <path d="M9 12h10" />
+          <path d="M9 17h10" />
+          <path d="m4 7 .7.7L6.4 6" />
+          <path d="m4 12 .7.7 1.7-1.7" />
+          <path d="m4 17 .7.7 1.7-1.7" />
+        </svg>
+      );
+    case "elapsed":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M9 2h6" />
+          <path d="M12 2v3" />
+          <path d="M17.5 6.5 19 5" />
+          <circle cx="12" cy="13" r="7" />
+          <path d="M12 9v5l3 2" />
+        </svg>
+      );
+    case "completed":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" />
+          <path d="m8.5 12.4 2.2 2.2 4.8-5.2" />
+        </svg>
+      );
+  }
+};
+
+const ButtonIcon = ({ name }: { name: "sliders" | "plus" | "column" }): JSX.Element => {
+  switch (name) {
+    case "sliders":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M4 7h10" />
+          <path d="M18 7h2" />
+          <circle cx="16" cy="7" r="2" />
+          <path d="M4 17h2" />
+          <path d="M10 17h10" />
+          <circle cx="8" cy="17" r="2" />
+          <path d="M4 12h4" />
+          <path d="M12 12h8" />
+          <circle cx="10" cy="12" r="2" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case "column":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 5v14" />
+          <path d="M5 9h14" />
+          <path d="M5 15h14" />
+        </svg>
+      );
+  }
+};
+
 export const BoardScreen = ({
   state,
   actions,
@@ -128,6 +218,7 @@ export const BoardScreen = ({
   const [newFieldType, setNewFieldType] = useState<FieldType>("text");
   const [newFieldScope, setNewFieldScope] = useState<FieldScope>("global");
   const [editColumnDraft, setEditColumnDraft] = useState<EditColumnDraft | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<BoardProjectFilter>("all");
   const [draft, setDraft] = useState<CreateTaskDraft>(() =>
     createDefaultTaskDraft(state.columns[0]?.id ?? "")
   );
@@ -153,10 +244,55 @@ export const BoardScreen = ({
     ? state.taskFieldValues.filter((fieldValue) => fieldValue.taskId === selectedTask.id)
     : [];
 
-  const todaySummary = useMemo(() => getTodaySummary(state), [state]);
   const sortedColumns = useMemo(
     () => state.columns.slice().sort((left, right) => left.orderIndex - right.orderIndex),
     [state.columns]
+  );
+  const sortedTaskProjects = useMemo(
+    () =>
+      state.taskProjects
+        .slice()
+        .sort((left, right) => left.orderIndex - right.orderIndex),
+    [state.taskProjects]
+  );
+  const taskCollectionsById = useMemo(
+    () => new Map(state.taskCollections.map((collection) => [collection.id, collection])),
+    [state.taskCollections]
+  );
+  const activeProjectFilter =
+    selectedProjectId === "all" ||
+    sortedTaskProjects.some((project) => project.id === selectedProjectId)
+      ? selectedProjectId
+      : "all";
+  const selectedProject =
+    activeProjectFilter === "all"
+      ? null
+      : sortedTaskProjects.find((project) => project.id === activeProjectFilter) ?? null;
+  const filteredTasks = useMemo(() => {
+    if (activeProjectFilter === "all") {
+      return state.tasks;
+    }
+
+    return state.tasks.filter((task) => {
+      if (task.taskProjectId === activeProjectFilter) {
+        return true;
+      }
+
+      if (!task.taskCollectionId) {
+        return false;
+      }
+
+      return taskCollectionsById.get(task.taskCollectionId)?.taskProjectId === activeProjectFilter;
+    });
+  }, [activeProjectFilter, state.tasks, taskCollectionsById]);
+  const todaySummary = useMemo(
+    () =>
+      getTodaySummary({
+        columns: state.columns,
+        pomodoroSessions: state.pomodoroSessions,
+        tasks: filteredTasks
+      }),
+    [filteredTasks, state.columns, state.pomodoroSessions]
   );
   const boardLayoutClassName = [
     "panel-stack",
@@ -169,10 +305,6 @@ export const BoardScreen = ({
   const boardLayoutStyle = {
     "--board-column-count": String(Math.max(sortedColumns.length, 1))
   } as CSSProperties;
-  const taskCollectionsById = useMemo(
-    () => new Map(state.taskCollections.map((collection) => [collection.id, collection])),
-    [state.taskCollections]
-  );
   const availableDraftProjects = state.taskProjects.filter((project) =>
     state.taskCollections.some((collection) => collection.taskProjectId === project.id)
   );
@@ -180,7 +312,9 @@ export const BoardScreen = ({
     (collection) => collection.taskProjectId === draft.taskProjectId
   );
 
-  const openCreateTaskModal = (): void => {
+  const openCreateTaskModal = (
+    columnId: ColumnId | "" = state.columns[0]?.id ?? ""
+  ): void => {
     const firstProject = availableDraftProjects[0];
     const firstCollection =
       firstProject !== undefined
@@ -188,7 +322,7 @@ export const BoardScreen = ({
         : undefined;
 
     setDraft({
-      ...createDefaultTaskDraft(state.columns[0]?.id ?? ""),
+      ...createDefaultTaskDraft(columnId || (state.columns[0]?.id ?? "")),
       taskProjectId: firstProject?.id ?? "",
       taskCollectionId: firstCollection?.id ?? ""
     });
@@ -295,27 +429,49 @@ export const BoardScreen = ({
     setEditColumnDraft(null);
   };
 
+  const todayStatCards: TodayStatCard[] = [
+    {
+      kind: "estimated",
+      label: "Estimated Time",
+      tone: "blue",
+      value: `${todaySummary.estimatedMinutes}m`
+    },
+    {
+      kind: "tasks",
+      label: "Tasks to be Completed",
+      tone: "violet",
+      value: String(todaySummary.openTaskCount)
+    },
+    {
+      kind: "elapsed",
+      label: "Elapsed Time",
+      tone: "amber",
+      value: `${todaySummary.elapsedMinutes}m`
+    },
+    {
+      kind: "completed",
+      label: "Completed Tasks",
+      tone: "green",
+      value: String(todaySummary.completedTaskCount)
+    }
+  ];
+
   return (
     <div className={boardLayoutClassName} style={boardLayoutStyle}>
       <section className="today-banner">
         <h2>Today</h2>
         <div className="today-banner-card">
-          <div className="today-stat">
-            <strong>{todaySummary.estimatedMinutes}m</strong>
-            <span>Estimated Time</span>
-          </div>
-          <div className="today-stat">
-            <strong>{todaySummary.openTaskCount}</strong>
-            <span>Tasks to be Completed</span>
-          </div>
-          <div className="today-stat">
-            <strong>{todaySummary.elapsedMinutes}m</strong>
-            <span>Elapsed Time</span>
-          </div>
-          <div className="today-stat">
-            <strong>{todaySummary.completedTaskCount}</strong>
-            <span>Completed Tasks</span>
-          </div>
+          {todayStatCards.map((stat) => (
+            <div className={`today-stat today-stat--${stat.tone}`} key={stat.kind}>
+              <span className="today-stat-icon">
+                <TodayStatIcon kind={stat.kind} />
+              </span>
+              <span className="today-stat-copy">
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -325,13 +481,55 @@ export const BoardScreen = ({
           <p>Plan work, inspect tasks in overlays, and jump straight into focus mode.</p>
         </div>
         <div className="task-actions">
-          <button className="ghost-button" onClick={() => setModalState("column-fields")} type="button">
+          <label className="board-project-filter">
+            <span className="board-project-filter-swatch-wrap" aria-hidden="true">
+              <span
+                className="board-project-filter-swatch"
+                style={
+                  {
+                    "--project-filter-color": selectedProject?.color ?? "#6b9dff"
+                  } as CSSProperties
+                }
+              />
+            </span>
+            <span className="board-project-filter-label">Project</span>
+            <select
+              aria-label="Filter board by project"
+              value={activeProjectFilter}
+              onChange={(event) =>
+                setSelectedProjectId(event.target.value as BoardProjectFilter)
+              }
+            >
+              <option value="all">All projects</option>
+              {sortedTaskProjects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="ghost-button board-action-button"
+            onClick={() => setModalState("column-fields")}
+            type="button"
+          >
+            <ButtonIcon name="sliders" />
             Column fields
           </button>
-          <button className="ghost-button" onClick={openCreateTaskModal} type="button">
+          <button
+            className="ghost-button board-action-button"
+            onClick={() => openCreateTaskModal()}
+            type="button"
+          >
+            <ButtonIcon name="plus" />
             Add task
           </button>
-          <button className="primary-button" onClick={actions.addColumn} type="button">
+          <button
+            className="primary-button board-action-button"
+            onClick={actions.addColumn}
+            type="button"
+          >
+            <ButtonIcon name="column" />
             Add column
           </button>
         </div>
@@ -339,34 +537,35 @@ export const BoardScreen = ({
 
       <div className="board-scroll">
         {sortedColumns.map((column) => (
-            <ColumnLane
-              key={column.id}
-              column={column}
-              tasks={state.tasks
-                .filter((task) => task.columnId === column.id)
-                .sort((left, right) => left.orderIndex - right.orderIndex)}
-              taskCollectionsById={taskCollectionsById}
-              selectedTaskId={state.selectedTaskId}
-              onDeleteColumn={(columnId) => {
-                const taskCount = state.tasks.filter((task) => task.columnId === columnId).length;
-                const confirmed = window.confirm(
-                  `Delete "${column.name}" and its ${taskCount} task${
-                    taskCount === 1 ? "" : "s"
-                  }?`
-                );
+          <ColumnLane
+            key={column.id}
+            column={column}
+            tasks={filteredTasks
+              .filter((task) => task.columnId === column.id)
+              .sort((left, right) => left.orderIndex - right.orderIndex)}
+            taskCollectionsById={taskCollectionsById}
+            selectedTaskId={state.selectedTaskId}
+            onDeleteColumn={(columnId) => {
+              const taskCount = state.tasks.filter((task) => task.columnId === columnId).length;
+              const confirmed = window.confirm(
+                `Delete "${column.name}" and its ${taskCount} task${
+                  taskCount === 1 ? "" : "s"
+                }?`
+              );
 
-                if (confirmed) {
-                  actions.deleteColumn(columnId);
-                }
-              }}
-              onEditColumn={openEditColumnModal}
-              onSelectTask={openTaskModal}
-              onMoveTask={actions.moveTask}
-              onReorderColumn={actions.reorderColumns}
-              onStartPomodoro={onStartPomodoro}
-              onDeleteTask={handleDeleteTaskById}
-            />
-          ))}
+              if (confirmed) {
+                actions.deleteColumn(columnId);
+              }
+            }}
+            onEditColumn={openEditColumnModal}
+            onSelectTask={openTaskModal}
+            onMoveTask={actions.moveTask}
+            onReorderColumn={actions.reorderColumns}
+            onStartPomodoro={onStartPomodoro}
+            onDeleteTask={handleDeleteTaskById}
+            onCreateTask={openCreateTaskModal}
+          />
+        ))}
       </div>
 
       {modalState !== null || editColumnDraft !== null ? (

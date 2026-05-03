@@ -55,6 +55,7 @@ type ModalState =
   | "edit-project"
   | "create-collection"
   | "edit-collection"
+  | "extend-due-dates"
   | "create-task"
   | "compose-markdown"
   | "edit-task"
@@ -97,6 +98,10 @@ interface CreateTaskDraft {
   estimatedPomodoros: string;
 }
 
+type DueDateShiftTarget =
+  | { type: "project"; projectId: TaskProjectId }
+  | { type: "collection"; collectionId: TaskCollectionId };
+
 interface TasksPageProps {
   columns: Column[];
   taskProjects: TaskProject[];
@@ -116,6 +121,8 @@ interface TasksPageProps {
     renameTaskProject: (taskProjectId: TaskProjectId, name: string) => void;
     createTaskCollection: (name: string, taskProjectId: TaskProjectId) => void;
     renameTaskCollection: (taskCollectionId: TaskCollectionId, name: string) => void;
+    extendTaskProjectDueDates: (taskProjectId: TaskProjectId, dayCount: number) => void;
+    extendTaskCollectionDueDates: (taskCollectionId: TaskCollectionId, dayCount: number) => void;
     deleteTaskProject: (taskProjectId: TaskProjectId) => void;
     deleteTaskCollection: (taskCollectionId: TaskCollectionId) => void;
     createTask: (input: CreateTaskInput) => void;
@@ -322,6 +329,8 @@ export const TasksPage = ({
   const [collectionName, setCollectionName] = useState("");
   const [collectionProjectId, setCollectionProjectId] = useState<TaskProjectId | null>(null);
   const [editingCollectionId, setEditingCollectionId] = useState<TaskCollectionId | null>(null);
+  const [dueDateShiftTarget, setDueDateShiftTarget] = useState<DueDateShiftTarget | null>(null);
+  const [dueDateShiftDays, setDueDateShiftDays] = useState("1");
   const [draft, setDraft] = useState<CreateTaskDraft>(() =>
     createDefaultTaskDraft(columns[0]?.id ?? "")
   );
@@ -329,6 +338,7 @@ export const TasksPage = ({
   const [composerErrors, setComposerErrors] = useState<MarkdownImportValidationError[]>([]);
   const [importFeedback, setImportFeedback] = useState<ImportFeedback>(null);
   const [isImportHelpOpen, setIsImportHelpOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [taskSort, setTaskSort] = useState<TaskSortState | null>(null);
   const [openTreeMenu, setOpenTreeMenu] = useState<TreeMenuState>(null);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>(() =>
@@ -340,6 +350,7 @@ export const TasksPage = ({
   const [pendingNavigationTaskId, setPendingNavigationTaskId] = useState<TaskId | null>(null);
   const projectNameInputRef = useRef<HTMLInputElement | null>(null);
   const collectionNameInputRef = useRef<HTMLInputElement | null>(null);
+  const dueDateShiftInputRef = useRef<HTMLInputElement | null>(null);
   const handledNavigationRequestRef = useRef<number | null>(null);
   const setSelectedView = onSelectedViewChange;
 
@@ -466,6 +477,64 @@ export const TasksPage = ({
   const availableDraftCollections = taskCollections.filter(
     (collection) => collection.taskProjectId === draft.taskProjectId
   );
+  const dueDateShiftScope = useMemo(() => {
+    if (!dueDateShiftTarget) {
+      return null;
+    }
+
+    const scopedTasks = tasks.filter((task) =>
+      dueDateShiftTarget.type === "project"
+        ? task.taskProjectId === dueDateShiftTarget.projectId
+        : task.taskCollectionId === dueDateShiftTarget.collectionId
+    );
+    const scheduledTaskCount = scopedTasks.filter(
+      (task) => task.completedAt === null && task.estimatedCompletionDate !== null
+    ).length;
+    const unscheduledTaskCount = scopedTasks.filter(
+      (task) => task.completedAt === null && task.estimatedCompletionDate === null
+    ).length;
+    const completedTaskCount = scopedTasks.filter((task) => task.completedAt !== null).length;
+
+    if (dueDateShiftTarget.type === "project") {
+      const project = taskProjectsById.get(dueDateShiftTarget.projectId) ?? null;
+
+      if (!project) {
+        return null;
+      }
+
+      return {
+        actionLabel: "Extend project dates",
+        completedTaskCount,
+        scheduledTaskCount,
+        subtitle: `Shift all scheduled incomplete tasks in ${project.name} forward by a fixed number of days.`,
+        targetLabel: project.name,
+        targetTypeLabel: "Project",
+        unscheduledTaskCount
+      };
+    }
+
+    const collection = taskCollectionsById.get(dueDateShiftTarget.collectionId) ?? null;
+    const project =
+      collection?.taskProjectId !== null && collection?.taskProjectId !== undefined
+        ? taskProjectsById.get(collection.taskProjectId) ?? null
+        : null;
+
+    if (!collection) {
+      return null;
+    }
+
+    return {
+      actionLabel: "Extend category dates",
+      completedTaskCount,
+      scheduledTaskCount,
+      subtitle: `Shift all scheduled incomplete tasks in ${collection.name}${
+        project ? ` within ${project.name}` : ""
+      } forward by a fixed number of days.`,
+      targetLabel: collection.name,
+      targetTypeLabel: "Category",
+      unscheduledTaskCount
+    };
+  }, [dueDateShiftTarget, taskCollectionsById, taskProjectsById, tasks]);
 
   const counts = useMemo(
     () => ({
@@ -514,14 +583,45 @@ export const TasksPage = ({
     return incompleteTasks;
   }, [incompleteTasks, now, selectedView, sortedTasks, todayKey, tomorrowKey]);
 
+  const filteredVisibleTasks = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (normalizedQuery.length === 0) {
+      return visibleTasks;
+    }
+
+    return visibleTasks.filter((task) => {
+      const columnName = columnsById.get(task.columnId)?.name ?? "";
+      const projectName =
+        task.taskProjectId !== null
+          ? taskProjectsById.get(task.taskProjectId)?.name ?? ""
+          : "";
+      const collectionName =
+        task.taskCollectionId !== null
+          ? taskCollectionsById.get(task.taskCollectionId)?.name ?? ""
+          : "";
+
+      return [task.title, task.description, columnName, projectName, collectionName]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery);
+    });
+  }, [
+    columnsById,
+    searchQuery,
+    taskCollectionsById,
+    taskProjectsById,
+    visibleTasks
+  ]);
+
   const sortedVisibleTasks = useMemo(() => {
     if (!taskSort) {
-      return visibleTasks;
+      return filteredVisibleTasks;
     }
 
     const directionMultiplier = taskSort.direction === "asc" ? 1 : -1;
 
-    return visibleTasks.slice().sort((left, right) => {
+    return filteredVisibleTasks.slice().sort((left, right) => {
       const leftStatus = columnsById.get(left.columnId)?.name ?? "Not Started";
       const rightStatus = columnsById.get(right.columnId)?.name ?? "Not Started";
 
@@ -553,7 +653,7 @@ export const TasksPage = ({
         }
       }
     });
-  }, [columnsById, taskSort, visibleTasks]);
+  }, [columnsById, filteredVisibleTasks, taskSort]);
 
   const openTaskModal = (taskId: TaskId): void => {
     actions.selectTask(taskId);
@@ -871,6 +971,48 @@ export const TasksPage = ({
     setModalState("edit-collection");
   };
 
+  const openExtendProjectDueDatesModal = (taskProjectId: TaskProjectId): void => {
+    if (!taskProjectsById.has(taskProjectId)) {
+      return;
+    }
+
+    setDueDateShiftTarget({ type: "project", projectId: taskProjectId });
+    setDueDateShiftDays("1");
+    setModalState("extend-due-dates");
+  };
+
+  const openExtendCollectionDueDatesModal = (taskCollectionId: TaskCollectionId): void => {
+    if (!taskCollectionsById.has(taskCollectionId)) {
+      return;
+    }
+
+    setDueDateShiftTarget({ type: "collection", collectionId: taskCollectionId });
+    setDueDateShiftDays("1");
+    setModalState("extend-due-dates");
+  };
+
+  const handleExtendDueDates = (): void => {
+    if (!dueDateShiftTarget) {
+      return;
+    }
+
+    const normalizedDayCount = Math.max(1, Math.floor(Number(dueDateShiftDays)));
+
+    if (!Number.isFinite(normalizedDayCount)) {
+      return;
+    }
+
+    if (dueDateShiftTarget.type === "project") {
+      actions.extendTaskProjectDueDates(dueDateShiftTarget.projectId, normalizedDayCount);
+    } else {
+      actions.extendTaskCollectionDueDates(dueDateShiftTarget.collectionId, normalizedDayCount);
+    }
+
+    setDueDateShiftTarget(null);
+    setDueDateShiftDays("1");
+    setModalState(null);
+  };
+
   const handleDeleteProject = (taskProjectId: TaskProjectId): void => {
     const project = taskProjectsById.get(taskProjectId);
 
@@ -952,6 +1094,8 @@ export const TasksPage = ({
         ? projectNameInputRef.current
         : modalState === "create-collection" || modalState === "edit-collection"
           ? collectionNameInputRef.current
+          : modalState === "extend-due-dates"
+            ? dueDateShiftInputRef.current
           : null;
 
     if (!focusTarget) {
@@ -1100,23 +1244,33 @@ export const TasksPage = ({
                         </svg>
                       </button>
 
-                      {isProjectMenuOpen ? (
-                        <div className="tasks-tree-context-menu" role="menu">
-                          <button
-                            className="tasks-tree-context-item"
-                            onClick={() => {
-                              setOpenTreeMenu(null);
-                              openEditProjectModal(project.id);
-                            }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="tasks-tree-context-item tasks-tree-context-item--danger"
-                            onClick={() => {
-                              setOpenTreeMenu(null);
-                              handleDeleteProject(project.id);
+                        {isProjectMenuOpen ? (
+                          <div className="tasks-tree-context-menu" role="menu">
+                            <button
+                              className="tasks-tree-context-item"
+                              onClick={() => {
+                                setOpenTreeMenu(null);
+                                openEditProjectModal(project.id);
+                              }}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="tasks-tree-context-item"
+                              onClick={() => {
+                                setOpenTreeMenu(null);
+                                openExtendProjectDueDatesModal(project.id);
+                              }}
+                              type="button"
+                            >
+                              Extend due dates
+                            </button>
+                            <button
+                              className="tasks-tree-context-item tasks-tree-context-item--danger"
+                              onClick={() => {
+                                setOpenTreeMenu(null);
+                                handleDeleteProject(project.id);
                             }}
                             type="button"
                           >
@@ -1203,23 +1357,33 @@ export const TasksPage = ({
                                     </svg>
                                   </button>
 
-                                  {isCollectionMenuOpen ? (
-                                    <div className="tasks-tree-context-menu" role="menu">
-                                      <button
-                                        className="tasks-tree-context-item"
-                                        onClick={() => {
-                                          setOpenTreeMenu(null);
-                                          openEditCollectionModal(collection.id);
-                                        }}
-                                        type="button"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        className="tasks-tree-context-item tasks-tree-context-item--danger"
-                                        onClick={() => {
-                                          setOpenTreeMenu(null);
-                                          handleDeleteCollection(collection.id);
+                                   {isCollectionMenuOpen ? (
+                                     <div className="tasks-tree-context-menu" role="menu">
+                                       <button
+                                         className="tasks-tree-context-item"
+                                         onClick={() => {
+                                           setOpenTreeMenu(null);
+                                           openEditCollectionModal(collection.id);
+                                         }}
+                                         type="button"
+                                       >
+                                         Edit
+                                       </button>
+                                       <button
+                                         className="tasks-tree-context-item"
+                                         onClick={() => {
+                                           setOpenTreeMenu(null);
+                                           openExtendCollectionDueDatesModal(collection.id);
+                                         }}
+                                         type="button"
+                                       >
+                                         Extend due dates
+                                       </button>
+                                       <button
+                                         className="tasks-tree-context-item tasks-tree-context-item--danger"
+                                         onClick={() => {
+                                           setOpenTreeMenu(null);
+                                           handleDeleteCollection(collection.id);
                                         }}
                                         type="button"
                                       >
@@ -1370,9 +1534,21 @@ export const TasksPage = ({
         <div className="tasks-main-header">
           <div className="board-title">
             <h2>{viewTitle}</h2>
-            <p>{visibleTasks.length} task{visibleTasks.length === 1 ? "" : "s"} in view.</p>
+            <p>
+              {sortedVisibleTasks.length} task{sortedVisibleTasks.length === 1 ? "" : "s"} in
+              view.
+            </p>
           </div>
           <div className="tasks-main-header-actions">
+            <label className="tasks-search-field">
+              <span className="sr-only">Search current task list</span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search tasks"
+              />
+            </label>
             {activeViewBadge ? (
               <CollectionBadge color={activeViewBadge.color} name={activeViewBadge.name} />
             ) : null}
@@ -1996,6 +2172,89 @@ export const TasksPage = ({
                     type="button"
                   >
                     Create task
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
+            {modalState === "extend-due-dates" && dueDateShiftScope ? (
+              <section className="panel-stack">
+                <div className="modal-header">
+                  <div>
+                    <h3>Extend Due Dates</h3>
+                    <p className="subtle">{dueDateShiftScope.subtitle}</p>
+                  </div>
+                  <button
+                    className="ghost-button"
+                    onClick={() => {
+                      setDueDateShiftTarget(null);
+                      setDueDateShiftDays("1");
+                      setModalState(null);
+                    }}
+                    type="button"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="focus-stat-grid tasks-shift-preview-grid">
+                  <div className="focus-stat-card">
+                    <span>{dueDateShiftScope.targetTypeLabel}</span>
+                    <strong>{dueDateShiftScope.targetLabel}</strong>
+                  </div>
+                  <div className="focus-stat-card">
+                    <span>Scheduled tasks</span>
+                    <strong>{dueDateShiftScope.scheduledTaskCount}</strong>
+                  </div>
+                  <div className="focus-stat-card">
+                    <span>No due date</span>
+                    <strong>{dueDateShiftScope.unscheduledTaskCount}</strong>
+                  </div>
+                  <div className="focus-stat-card">
+                    <span>Completed</span>
+                    <strong>{dueDateShiftScope.completedTaskCount}</strong>
+                  </div>
+                </div>
+
+                <label className="label-stack">
+                  <span>Days to add</span>
+                  <input
+                    min={1}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    ref={dueDateShiftInputRef}
+                    type="number"
+                    value={dueDateShiftDays}
+                    onChange={(event) => setDueDateShiftDays(event.target.value)}
+                  />
+                </label>
+
+                <div className="import-help-copy">
+                  <p className="subtle">
+                    Only incomplete tasks that already have a due date will be updated. Tasks
+                    without a due date and completed tasks are left unchanged.
+                  </p>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    className="ghost-button"
+                    onClick={() => {
+                      setDueDateShiftTarget(null);
+                      setDueDateShiftDays("1");
+                      setModalState(null);
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={dueDateShiftScope.scheduledTaskCount === 0}
+                    onClick={handleExtendDueDates}
+                    type="button"
+                  >
+                    {dueDateShiftScope.actionLabel}
                   </button>
                 </div>
               </section>

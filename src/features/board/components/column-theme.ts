@@ -66,11 +66,11 @@ const mixHex = (sourceHex: string, targetHex: string, ratio: number): string => 
 
 export const getDefaultColumnColor = (index: number): string =>
   ([
-    "#f091c5",
-    "#de9a34",
-    "#48c4d9",
-    "#8b74ea"
-  ][index % 4] ?? "#f091c5");
+    "#4a8dff",
+    "#9b6dff",
+    "#f1a340",
+    "#63d26f"
+  ][index % 4] ?? "#4a8dff");
 
 const buildThemeFromColor = (color: string): ColumnTheme => ({
   accent: color,
@@ -80,31 +80,31 @@ const buildThemeFromColor = (color: string): ColumnTheme => ({
 });
 
 const todoTheme: ColumnTheme = {
-  accent: "#f091c5",
-  background: "rgba(73, 28, 57, 0.58)",
-  border: "rgba(240, 145, 197, 0.72)",
-  dot: "#f091c5"
+  accent: "#4a8dff",
+  background: "rgba(20, 57, 114, 0.46)",
+  border: "rgba(74, 141, 255, 0.78)",
+  dot: "#4a8dff"
 };
 
 const inProgressTheme: ColumnTheme = {
-  accent: "#de9a34",
-  background: "rgba(88, 61, 24, 0.58)",
-  border: "rgba(222, 154, 52, 0.72)",
-  dot: "#de9a34"
+  accent: "#9b6dff",
+  background: "rgba(62, 35, 104, 0.5)",
+  border: "rgba(155, 109, 255, 0.78)",
+  dot: "#9b6dff"
 };
 
 const reviewTheme: ColumnTheme = {
-  accent: "#33a8bc",
-  background: "rgba(20, 74, 86, 0.58)",
-  border: "rgba(51, 168, 188, 0.72)",
-  dot: "#48c4d9"
+  accent: "#f1a340",
+  background: "rgba(92, 57, 18, 0.46)",
+  border: "rgba(241, 163, 64, 0.76)",
+  dot: "#f1a340"
 };
 
 const doneTheme: ColumnTheme = {
-  accent: "#8b74ea",
-  background: "rgba(55, 42, 92, 0.58)",
-  border: "rgba(139, 116, 234, 0.72)",
-  dot: "#8b74ea"
+  accent: "#63d26f",
+  background: "rgba(22, 92, 59, 0.5)",
+  border: "rgba(61, 199, 111, 0.78)",
+  dot: "#63d26f"
 };
 
 const fallbackThemes: ColumnTheme[] = [
@@ -121,10 +121,6 @@ export const getColumnTheme = (
 ): ColumnTheme => {
   const normalized = columnName.trim().toLowerCase();
   const fallbackTheme = fallbackThemes[index % fallbackThemes.length] ?? todoTheme;
-
-  if (explicitColor && hexToRgb(explicitColor)) {
-    return buildThemeFromColor(explicitColor);
-  }
 
   if (
     normalized.includes("to do") ||
@@ -148,6 +144,10 @@ export const getColumnTheme = (
 
   if (normalized.includes("complete") || normalized.includes("done")) {
     return doneTheme;
+  }
+
+  if (explicitColor && hexToRgb(explicitColor)) {
+    return buildThemeFromColor(explicitColor);
   }
 
   return fallbackTheme;

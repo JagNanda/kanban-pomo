@@ -32,6 +32,7 @@ import type {
   MarkdownImportDocument
 } from "../../tasks/application/markdown-import";
 import { normalizeImportKey } from "../../tasks/application/markdown-import";
+import { shiftDateOnlyValue } from "../../tasks/domain/task-deadline";
 import { formatHoursFromSeconds, toIsoNow } from "../../../shared/lib/time";
 import type { BoardSnapshot } from "../../../lib/electron-api/board-snapshot";
 import { getDefaultColumnColor } from "../components/column-theme";
@@ -251,6 +252,42 @@ const ensureInDevColumnState = (
   return {
     columns: [...current.columns, newColumn],
     inDevColumnId: newColumn.id
+  };
+};
+
+const shiftMatchingTaskDueDates = (
+  current: BoardViewState,
+  dayCount: number,
+  matchesTask: (task: Task) => boolean
+): BoardViewState => {
+  const normalizedDayCount = Math.max(0, Math.floor(dayCount));
+
+  if (normalizedDayCount === 0) {
+    return current;
+  }
+
+  const updatedAt = toIsoNow();
+
+  return {
+    ...current,
+    tasks: current.tasks.map((task) => {
+      if (
+        !matchesTask(task) ||
+        task.completedAt !== null ||
+        task.estimatedCompletionDate === null
+      ) {
+        return task;
+      }
+
+      return {
+        ...task,
+        estimatedCompletionDate: shiftDateOnlyValue(
+          task.estimatedCompletionDate,
+          normalizedDayCount
+        ),
+        updatedAt
+      };
+    })
   };
 };
 
@@ -524,6 +561,32 @@ export const useBoardState = () => {
             : collection
         )
       }));
+    },
+    extendTaskProjectDueDates: (taskProjectId: TaskProjectId, dayCount: number) => {
+      updateState((current) => {
+        if (!current.taskProjects.some((project) => project.id === taskProjectId)) {
+          return current;
+        }
+
+        return shiftMatchingTaskDueDates(
+          current,
+          dayCount,
+          (task) => task.taskProjectId === taskProjectId
+        );
+      });
+    },
+    extendTaskCollectionDueDates: (taskCollectionId: TaskCollectionId, dayCount: number) => {
+      updateState((current) => {
+        if (!current.taskCollections.some((collection) => collection.id === taskCollectionId)) {
+          return current;
+        }
+
+        return shiftMatchingTaskDueDates(
+          current,
+          dayCount,
+          (task) => task.taskCollectionId === taskCollectionId
+        );
+      });
     },
     deleteTaskProject: (taskProjectId: TaskProjectId) => {
       updateState((current) => {

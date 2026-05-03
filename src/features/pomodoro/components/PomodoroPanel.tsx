@@ -28,12 +28,14 @@ interface PomodoroPanelProps {
   onSelectTask: (taskId: Task["id"]) => void;
   onOpenCompletedTask: (taskId: Task["id"]) => void;
   onStart: (taskId: Task["id"]) => void;
+  onStartShortBreak: (taskId: Task["id"]) => void;
   onConfigChange: (config: PomodoroConfig) => void;
   onFinish: () => void;
   onPause: () => void;
   onResume: () => void;
   onInterrupt: () => void;
   onSkipBreak: () => void;
+  onReset: () => void;
 }
 
 const describeTimerState = (timerState: TimerState, config: PomodoroConfig): string => {
@@ -66,7 +68,7 @@ const getPhaseTone = (timerState: TimerState): "work" | "short_break" | "long_br
 
 const getTimerProgress = (timerState: TimerState, config: PomodoroConfig): number => {
   if (timerState.status === "idle") {
-    return 0;
+    return 0.26;
   }
 
   if (timerState.status === "paused") {
@@ -109,6 +111,95 @@ interface RecentActivityItem {
   meta: string;
 }
 
+type PomodoroIconName =
+  | "calendar"
+  | "check"
+  | "coffee"
+  | "cup"
+  | "gear"
+  | "play"
+  | "refresh"
+  | "stopwatch"
+  | "timer";
+
+const PomodoroIcon = ({ name }: { name: PomodoroIconName }): JSX.Element => {
+  switch (name) {
+    case "calendar":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect height="15" rx="2" width="16" x="4" y="5" />
+          <path d="M8 3v4" />
+          <path d="M16 3v4" />
+          <path d="M4 10h16" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" />
+          <path d="m8.6 12.4 2.2 2.2 4.8-5.2" />
+        </svg>
+      );
+    case "coffee":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M5 8h10v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V8Z" />
+          <path d="M15 9h2a2.5 2.5 0 0 1 0 5h-2" />
+          <path d="M6 20h10" />
+        </svg>
+      );
+    case "cup":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M5 8h10v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V8Z" />
+          <path d="M15 9h2a2.5 2.5 0 0 1 0 5h-2" />
+        </svg>
+      );
+    case "gear":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.8 7.8 0 0 0-2.1-1.2L14 3h-4l-.4 2.6a7.8 7.8 0 0 0-2.1 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7.8 7.8 0 0 0 2.1 1.2L10 21h4l.4-2.6a7.8 7.8 0 0 0 2.1-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z" />
+        </svg>
+      );
+    case "play":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="m8 5 11 7-11 7V5Z" />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+          <path d="M20 4v6h-6" />
+        </svg>
+      );
+    case "stopwatch":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M9 2h6" />
+          <path d="M12 2v3" />
+          <path d="M17.5 6.5 19 5" />
+          <circle cx="12" cy="13" r="7" />
+          <path d="M12 9v5l3 2" />
+        </svg>
+      );
+    case "timer":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7v5l3.5 2.1" />
+        </svg>
+      );
+  }
+};
+
+const formatActivityTitle = (value: string): string =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+
 export const PomodoroPanel = ({
   tasksInDev,
   upcomingDueTasks,
@@ -123,12 +214,14 @@ export const PomodoroPanel = ({
   onSelectTask,
   onOpenCompletedTask,
   onStart,
+  onStartShortBreak,
   onConfigChange,
   onFinish,
   onPause,
   onResume,
   onInterrupt,
-  onSkipBreak
+  onSkipBreak,
+  onReset
 }: PomodoroPanelProps): JSX.Element => {
   const phaseTone = getPhaseTone(timerState);
   const phaseLabel = getPhaseLabel(timerState);
@@ -141,26 +234,34 @@ export const PomodoroPanel = ({
   const todayBreaksTaken = allBreakRecords.filter(
     (record) => isToday(record.startedAt) && record.action === "completed"
   ).length;
+  const todayFocusMinutes = Math.round(todayFocusSeconds / 60);
   const recentActivity: RecentActivityItem[] = [
     ...taskSessionHistory.map((session) => ({
       id: session.id,
       startedAt: session.startedAt,
-      title: session.status,
+      title:
+        session.status === "completed"
+          ? "focus session completed"
+          : `focus session ${session.status}`,
       detail: formatDurationClock(session.actualDurationSeconds),
       meta: new Date(session.startedAt).toLocaleTimeString()
     })),
     ...breakHistory.map((record) => ({
       id: record.id,
       startedAt: record.startedAt,
-      title: record.phaseType.replace("_", " "),
-      detail: record.action,
-      meta: formatDurationClock(record.actualDurationSeconds)
+      title: `${record.phaseType.replace("_", " ")} ${record.action}`,
+      detail: formatDurationClock(record.actualDurationSeconds),
+      meta: new Date(record.startedAt).toLocaleTimeString()
     }))
   ]
     .sort(
       (left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()
     )
     .slice(0, 4);
+  const activeTaskPomodoroTarget = Math.max(
+    selectedTask?.estimatedPomodoros ?? config.longBreakAfterWorkSessions,
+    1
+  );
 
   return (
     <section
@@ -209,58 +310,169 @@ export const PomodoroPanel = ({
 
           <div className="timer-actions timer-actions--focus">
             {timerState.status === "idle" && selectedTask ? (
-              <button
-                className="primary-button"
-                onClick={() => onStart(selectedTask.id)}
-                type="button"
-              >
-                Start focus
-              </button>
+              <>
+                <button
+                  className="primary-button focus-action-button focus-action-button--primary"
+                  onClick={() => onStart(selectedTask.id)}
+                  type="button"
+                >
+                  <PomodoroIcon name="play" />
+                  Start focus
+                </button>
+                <button
+                  className="ghost-button focus-action-button"
+                  onClick={() => onStartShortBreak(selectedTask.id)}
+                  type="button"
+                >
+                  <PomodoroIcon name="cup" />
+                  Start short break
+                </button>
+              </>
             ) : null}
 
             {(timerState.status === "running" || timerState.status === "paused") &&
             timerState.phaseType === "work" ? (
-              <button className="primary-button" onClick={onFinish} type="button">
+              <button
+                className="primary-button focus-action-button focus-action-button--primary"
+                onClick={onFinish}
+                type="button"
+              >
+                <PomodoroIcon name="check" />
                 Finish
               </button>
             ) : null}
 
             {timerState.status === "running" ? (
-              <button className="ghost-button" onClick={onPause} type="button">
+              <button className="ghost-button focus-action-button" onClick={onPause} type="button">
                 Pause
               </button>
             ) : null}
 
             {timerState.status === "paused" ? (
-              <button className="primary-button" onClick={onResume} type="button">
+              <button
+                className="primary-button focus-action-button focus-action-button--primary"
+                onClick={onResume}
+                type="button"
+              >
+                <PomodoroIcon name="play" />
                 Continue
               </button>
             ) : null}
 
             {(timerState.status === "running" || timerState.status === "paused") &&
             (timerState.phaseType === "short_break" || timerState.phaseType === "long_break") ? (
-              <button className="ghost-button" onClick={onSkipBreak} type="button">
+              <button className="ghost-button focus-action-button" onClick={onSkipBreak} type="button">
                 Skip break
               </button>
             ) : null}
 
             {timerState.status !== "idle" ? (
-              <button className="danger-button" onClick={onInterrupt} type="button">
+              <button className="danger-button focus-action-button" onClick={onInterrupt} type="button">
                 Stop
               </button>
             ) : null}
+
+            <button className="ghost-button focus-action-button" onClick={onReset} type="button">
+              <PomodoroIcon name="refresh" />
+              Reset
+            </button>
+          </div>
+
+          <div className="focus-session-grid" aria-label="Pomodoro timing summary">
+            <div className="focus-session-card focus-session-card--blue">
+              <span className="focus-session-icon">
+                <PomodoroIcon name="stopwatch" />
+              </span>
+              <span>
+                <small>Session length</small>
+                <strong>{Math.floor(config.workDurationSeconds / 60)} min</strong>
+              </span>
+            </div>
+            <div className="focus-session-card focus-session-card--violet">
+              <span className="focus-session-icon">
+                <PomodoroIcon name="cup" />
+              </span>
+              <span>
+                <small>Short break</small>
+                <strong>{Math.floor(config.shortBreakDurationSeconds / 60)} min</strong>
+              </span>
+            </div>
+            <div className="focus-session-card focus-session-card--green">
+              <span className="focus-session-icon">
+                <PomodoroIcon name="coffee" />
+              </span>
+              <span>
+                <small>Long break</small>
+                <strong>{Math.floor(config.longBreakDurationSeconds / 60)} min</strong>
+              </span>
+            </div>
+            <div className="focus-session-card focus-session-card--amber">
+              <span className="focus-session-icon">
+                <PomodoroIcon name="timer" />
+              </span>
+              <span>
+                <small>Pomodoros today</small>
+                <strong>
+                  {todayCompletedPomodoros} / {activeTaskPomodoroTarget}
+                </strong>
+              </span>
+            </div>
           </div>
         </div>
+
+        <section className="focus-plan-panel">
+          <div className="focus-card-header">
+            <span className="focus-section-label">Today's Focus Plan</span>
+          </div>
+
+          <div className="focus-plan-grid">
+            <div className="focus-plan-card focus-plan-card--blue">
+              <span className="focus-plan-icon">
+                <PomodoroIcon name="stopwatch" />
+              </span>
+              <span>
+                <small>Focused time</small>
+                <strong>{todayFocusMinutes}m</strong>
+                <em>Across work and breaks</em>
+              </span>
+            </div>
+            <div className="focus-plan-card focus-plan-card--violet">
+              <span className="focus-plan-icon">
+                <PomodoroIcon name="check" />
+              </span>
+              <span>
+                <small>Pomodoros earned</small>
+                <strong>{todayCompletedPomodoros}</strong>
+                <em>Keep it going</em>
+              </span>
+            </div>
+            <div className="focus-plan-card focus-plan-card--green">
+              <span className="focus-plan-icon">
+                <PomodoroIcon name="coffee" />
+              </span>
+              <span>
+                <small>Breaks taken</small>
+                <strong>{todayBreaksTaken}</strong>
+                <em>You've got this</em>
+              </span>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div className="focus-sidebar">
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--task">
-          <div className="focus-task-header">
-            <div>
-              <span className="eyebrow">Focus Mode</span>
-              <h2>{selectedTask?.title ?? "Select a task in In Dev"}</h2>
-            </div>
+          <div className="focus-card-header">
+            <span className="focus-section-label">Focus Task</span>
+            <button className="focus-icon-button" aria-label="Focus task actions" type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="12" cy="5" r="1.7" />
+                <circle cx="12" cy="12" r="1.7" />
+                <circle cx="12" cy="19" r="1.7" />
+              </svg>
+            </button>
           </div>
+          <h2 className="focus-task-title">{selectedTask?.title ?? "Select a task in In Dev"}</h2>
 
           {selectedTask ? (
             <div className="focus-task-meta">
@@ -274,7 +486,7 @@ export const PomodoroPanel = ({
                 </div>
               </div>
               <div className="focus-meta-row">
-                <span>Estimated</span>
+                <span>Estimated pomodoros</span>
                 <StopwatchIcons
                   count={selectedTask.estimatedPomodoros}
                   size="sm"
@@ -282,7 +494,7 @@ export const PomodoroPanel = ({
                 />
               </div>
               <div className="focus-meta-row">
-                <span>Completed</span>
+                <span>Completed pomodoros</span>
                 <StopwatchIcons
                   count={selectedTask.pomodoroCount}
                   size="sm"
@@ -293,44 +505,27 @@ export const PomodoroPanel = ({
           ) : null}
         </section>
 
-        <section className="panel-card panel-stack focus-panel-card focus-panel-card--overview">
-          <div className="panel-title">
-            <h3>Focus Today</h3>
-            <p>Daily totals across work and breaks.</p>
-          </div>
-
-          <div className="focus-stat-grid">
-            <div className="focus-stat-card">
-              <span>Focused</span>
-              <strong>{Math.round(todayFocusSeconds / 60)}m</strong>
-            </div>
-            <div className="focus-stat-card">
-              <span>Pomodoros earned</span>
-              <strong>{todayCompletedPomodoros}</strong>
-            </div>
-            <div className="focus-stat-card">
-              <span>Breaks taken</span>
-              <strong>{todayBreaksTaken}</strong>
-            </div>
-          </div>
-        </section>
-
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--deadlines">
-          <div className="panel-title">
-            <h3>Upcoming Due Dates</h3>
-            <p>Open tasks with the nearest deadlines.</p>
+          <div className="focus-card-header">
+            <span className="focus-section-label">Upcoming Due</span>
+            <button className="focus-view-link" type="button">
+              View all
+            </button>
           </div>
 
           <div className="history-stack">
             {upcomingDueTasks.map((task) => (
-              <div className="history-item" key={task.id}>
-                <div>
+              <div className="focus-due-item" key={task.id}>
+                <span className="focus-row-icon">
+                  <PomodoroIcon name="calendar" />
+                </span>
+                <div className="focus-due-copy">
                   <strong>{task.title}</strong>
-                  <span>{task.estimatedCompletionDate}</span>
                 </div>
-                <div className="history-meta">
-                  <span>{task.priority}</span>
-                </div>
+                <time>{task.estimatedCompletionDate}</time>
+                <span className={`priority-pill priority-pill--${task.priority}`}>
+                  {task.priority}
+                </span>
               </div>
             ))}
             {upcomingDueTasks.length === 0 ? (
@@ -340,9 +535,8 @@ export const PomodoroPanel = ({
         </section>
 
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--completed">
-          <div className="panel-title">
-            <h3>Completed Today</h3>
-            <p>Tasks moved into completed today.</p>
+          <div className="focus-card-header">
+            <span className="focus-section-label">Completed Today</span>
           </div>
 
           <div className="history-stack">
@@ -363,27 +557,31 @@ export const PomodoroPanel = ({
               </button>
             ))}
             {completedTodayTasks.length === 0 ? (
-              <div className="empty-state">None</div>
+              <div className="focus-empty-compact">
+                <span className="focus-empty-icon">
+                  <PomodoroIcon name="check" />
+                </span>
+                <strong>None</strong>
+                <span>No tasks completed yet today.</span>
+              </div>
             ) : null}
           </div>
         </section>
 
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--history">
-          <div className="panel-title">
-            <h3>Task History</h3>
-            <p>Recent work and break events for the selected task.</p>
+          <div className="focus-card-header">
+            <span className="focus-section-label">Recent Activity</span>
+            <button className="focus-view-link" type="button">
+              View all
+            </button>
           </div>
 
           <div className="history-stack">
             {recentActivity.map((activity) => (
-              <div className="history-item" key={activity.id}>
-                <div>
-                  <strong>{activity.title}</strong>
-                  <span>{activity.detail}</span>
-                </div>
-                <div className="history-meta">
-                  <span>{activity.meta}</span>
-                </div>
+              <div className="focus-activity-item" key={activity.id}>
+                <span className="focus-activity-dot" />
+                <strong>{formatActivityTitle(activity.title)}</strong>
+                <time>{activity.detail}</time>
               </div>
             ))}
             {recentActivity.length === 0 ? (
@@ -393,12 +591,14 @@ export const PomodoroPanel = ({
         </section>
 
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--settings">
-          <div className="panel-title">
-            <h3>Pomodoro Settings</h3>
-            <p>Saved locally on the desktop app.</p>
+          <div className="focus-card-header">
+            <span className="focus-section-label">Pomodoro Settings</span>
+            <button className="focus-icon-button" aria-label="Pomodoro settings" type="button">
+              <PomodoroIcon name="gear" />
+            </button>
           </div>
 
-          <div className="sub-grid focus-settings-grid">
+          <div className="focus-settings-grid">
             <label className="label-stack">
               <span>Long break after sessions</span>
               <input

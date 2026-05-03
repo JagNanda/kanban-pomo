@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 interface SegmentedTimerRingProps {
   progress: number;
   tone: "work" | "short_break" | "long_break" | "idle";
@@ -11,13 +13,20 @@ export const SegmentedTimerRing = ({
   progress,
   tone
 }: SegmentedTimerRingProps): JSX.Element => {
-  const filledCount = Math.round(Math.max(0, Math.min(1, progress)) * totalSegments);
+  const normalizedProgress = Math.max(0, Math.min(1, progress));
+  const filledCount = Math.round(normalizedProgress * totalSegments);
+  const progressStyle = {
+    "--timer-progress": `${normalizedProgress * 360}deg`
+  } as CSSProperties;
 
   return (
-    <div className={`timer-ring timer-ring--${tone}`} aria-hidden="true">
+    <div className={`timer-ring timer-ring--${tone}`} aria-hidden="true" style={progressStyle}>
       <span className="timer-ring-halo timer-ring-halo--outer" />
       <span className="timer-ring-halo timer-ring-halo--inner" />
       <span className="timer-ring-core" />
+      <span className="timer-ring-track" />
+      <span className="timer-ring-progress" />
+      <span className="timer-ring-progress-dot" />
       {Array.from({ length: totalSegments }).map((_, index) => (
         <span
           key={index}

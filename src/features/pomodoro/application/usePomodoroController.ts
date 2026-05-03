@@ -226,6 +226,18 @@ export const usePomodoroController = ({
         cycleWorkSessionIndex: 0
       });
     },
+    startShortBreakForTask: (taskId: TaskId) => {
+      void ensurePomodoroAudioReady();
+      setState({
+        status: "running",
+        taskId,
+        phaseType: "short_break",
+        startedAt: new Date().toISOString(),
+        endsAt: new Date(Date.now() + config.shortBreakDurationSeconds * 1000).toISOString(),
+        secondsRemaining: config.shortBreakDurationSeconds,
+        cycleWorkSessionIndex: 0
+      });
+    },
     pause: () => {
       setState((current) => {
         if (current.status !== "running") {
@@ -374,6 +386,12 @@ export const usePomodoroController = ({
           cycleWorkSessionIndex: current.cycleWorkSessionIndex
         };
       });
+    },
+    reset: () => {
+      setState((current) => ({
+        status: "idle",
+        taskId: current.taskId
+      }));
     },
     updateConfig: (nextConfig: PomodoroConfig) => {
       setConfig(nextConfig);
