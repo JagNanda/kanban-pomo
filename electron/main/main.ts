@@ -21,37 +21,39 @@ interface NativeToneStep {
 
 const nativeChimePatternById: Record<PomodoroChimeId, NativeToneStep[]> = {
   "bright-bells": [
-    { frequency: 880, durationMs: 130, pauseAfterMs: 60 },
-    { frequency: 1174, durationMs: 150, pauseAfterMs: 70 },
-    { frequency: 1568, durationMs: 260 }
+    { frequency: 1046, durationMs: 95, pauseAfterMs: 35 },
+    { frequency: 1397, durationMs: 110, pauseAfterMs: 35 },
+    { frequency: 1760, durationMs: 180, pauseAfterMs: 30 },
+    { frequency: 2349, durationMs: 240 }
   ],
   "victory-ping": [
-    { frequency: 784, durationMs: 130, pauseAfterMs: 50 },
-    { frequency: 1046, durationMs: 150, pauseAfterMs: 55 },
-    { frequency: 1318, durationMs: 180, pauseAfterMs: 75 },
-    { frequency: 1760, durationMs: 280 }
+    { frequency: 523, durationMs: 120, pauseAfterMs: 50 },
+    { frequency: 659, durationMs: 120, pauseAfterMs: 45 },
+    { frequency: 784, durationMs: 155, pauseAfterMs: 55 },
+    { frequency: 1046, durationMs: 340 }
   ],
   "triple-rise": [
-    { frequency: 988, durationMs: 120, pauseAfterMs: 45 },
-    { frequency: 1318, durationMs: 120, pauseAfterMs: 50 },
-    { frequency: 988, durationMs: 120, pauseAfterMs: 55 },
-    { frequency: 1760, durationMs: 260 }
+    { frequency: 440, durationMs: 110, pauseAfterMs: 75 },
+    { frequency: 660, durationMs: 110, pauseAfterMs: 75 },
+    { frequency: 880, durationMs: 130, pauseAfterMs: 75 },
+    { frequency: 1320, durationMs: 320 }
   ],
   "soft-bloom": [
-    { frequency: 523, durationMs: 180, pauseAfterMs: 65 },
-    { frequency: 659, durationMs: 220, pauseAfterMs: 80 },
-    { frequency: 784, durationMs: 320 }
+    { frequency: 330, durationMs: 300, pauseAfterMs: 80 },
+    { frequency: 392, durationMs: 340, pauseAfterMs: 85 },
+    { frequency: 494, durationMs: 460 }
   ],
   "gentle-glass": [
-    { frequency: 392, durationMs: 220, pauseAfterMs: 70 },
-    { frequency: 523, durationMs: 280, pauseAfterMs: 90 },
-    { frequency: 659, durationMs: 340 }
+    { frequency: 740, durationMs: 180, pauseAfterMs: 70 },
+    { frequency: 988, durationMs: 200, pauseAfterMs: 80 },
+    { frequency: 1245, durationMs: 220, pauseAfterMs: 95 },
+    { frequency: 1661, durationMs: 380 }
   ],
   "quiet-morning": [
-    { frequency: 440, durationMs: 180, pauseAfterMs: 60 },
-    { frequency: 554, durationMs: 180, pauseAfterMs: 60 },
-    { frequency: 659, durationMs: 260, pauseAfterMs: 80 },
-    { frequency: 880, durationMs: 320 }
+    { frequency: 392, durationMs: 240, pauseAfterMs: 60 },
+    { frequency: 330, durationMs: 240, pauseAfterMs: 80 },
+    { frequency: 494, durationMs: 320, pauseAfterMs: 70 },
+    { frequency: 659, durationMs: 420 }
   ]
 };
 

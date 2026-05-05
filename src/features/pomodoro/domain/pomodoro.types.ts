@@ -3,7 +3,8 @@ import type { TaskId } from "../../tasks/domain/task.types";
 
 export type PomodoroSessionId = Brand<string, "PomodoroSessionId">;
 export type BreakRecordId = Brand<string, "BreakRecordId">;
-export type PomodoroPhaseType = "work" | "short_break" | "long_break";
+export type ProcrastinationRecordId = Brand<string, "ProcrastinationRecordId">;
+export type PomodoroPhaseType = "work" | "short_break" | "long_break" | "procrastination";
 export type PomodoroSessionStatus = "completed" | "interrupted" | "abandoned";
 export type BreakAction = "completed" | "skipped";
 export type PomodoroChimeId =
@@ -45,6 +46,15 @@ export interface BreakRecord {
   endedAt: string | null;
 }
 
+export interface ProcrastinationRecord {
+  id: ProcrastinationRecordId;
+  taskId: TaskId;
+  actualDurationSeconds: number;
+  note: string;
+  startedAt: string;
+  endedAt: string;
+}
+
 export type TimerState =
   | {
       status: "idle";
@@ -55,15 +65,19 @@ export type TimerState =
       taskId: TaskId;
       phaseType: PomodoroPhaseType;
       startedAt: string;
-      endsAt: string;
+      endsAt: string | null;
+      plannedDurationSeconds: number;
       secondsRemaining: number;
+      secondsElapsed: number;
       cycleWorkSessionIndex: number;
     }
   | {
       status: "paused";
       taskId: TaskId;
       phaseType: PomodoroPhaseType;
+      plannedDurationSeconds: number;
       remainingSeconds: number;
+      elapsedSeconds: number;
       cycleWorkSessionIndex: number;
       startedAt: string;
     };

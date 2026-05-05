@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatDurationClock } from "../../../shared/lib/time";
 import {
   pomodoroChimeOptions,
@@ -10,6 +11,7 @@ import type {
   BreakRecord,
   PomodoroConfig,
   PomodoroSession,
+  ProcrastinationRecord,
   TimerState
 } from "../domain/pomodoro.types";
 import { SegmentedTimerRing } from "./SegmentedTimerRing";
@@ -17,24 +19,28 @@ import { SegmentedTimerRing } from "./SegmentedTimerRing";
 interface PomodoroPanelProps {
   tasksInDev: Task[];
   upcomingDueTasks: Task[];
-  completedTodayTasks: Task[];
   timerState: TimerState;
   config: PomodoroConfig;
   selectedTask: Task | null;
   allPomodoroSessions: PomodoroSession[];
   allBreakRecords: BreakRecord[];
+  allProcrastinationRecords: ProcrastinationRecord[];
   taskSessionHistory: PomodoroSession[];
   breakHistory: BreakRecord[];
+  procrastinationHistory: ProcrastinationRecord[];
   onSelectTask: (taskId: Task["id"]) => void;
-  onOpenCompletedTask: (taskId: Task["id"]) => void;
+  onViewAllUpcomingDue: () => void;
+  onViewAllRecentActivity: () => void;
   onStart: (taskId: Task["id"]) => void;
-  onStartShortBreak: (taskId: Task["id"]) => void;
+  onStartBreak: (taskId: Task["id"], durationSeconds: number) => void;
+  onStartProcrastinating: (taskId: Task["id"]) => void;
   onConfigChange: (config: PomodoroConfig) => void;
   onFinish: () => void;
+  onFinishBreak: () => void;
   onPause: () => void;
   onResume: () => void;
-  onInterrupt: () => void;
-  onSkipBreak: () => void;
+  onCancel: () => void;
+  onStopProcrastinating: (note: string) => void;
   onReset: () => void;
 }
 
@@ -44,7 +50,15 @@ const describeTimerState = (timerState: TimerState, config: PomodoroConfig): str
   }
 
   if (timerState.status === "paused") {
+    if (timerState.phaseType === "procrastination") {
+      return formatDurationClock(timerState.elapsedSeconds);
+    }
+
     return formatDurationClock(timerState.remainingSeconds);
+  }
+
+  if (timerState.phaseType === "procrastination") {
+    return formatDurationClock(timerState.secondsElapsed);
   }
 
   return formatDurationClock(timerState.secondsRemaining);
@@ -55,10 +69,14 @@ const getPhaseLabel = (timerState: TimerState): string => {
     return "Ready for a focus block";
   }
 
+  if (timerState.phaseType === "procrastination") {
+    return "Procrastinating";
+  }
+
   return timerState.phaseType.replace("_", " ");
 };
 
-const getPhaseTone = (timerState: TimerState): "work" | "short_break" | "long_break" | "idle" => {
+const getPhaseTone = (timerState: TimerState): "work" | "short_break" | "long_break" | "procrastination" | "idle" => {
   if (timerState.status === "idle") {
     return "idle";
   }
@@ -68,28 +86,22 @@ const getPhaseTone = (timerState: TimerState): "work" | "short_break" | "long_br
 
 const getTimerProgress = (timerState: TimerState, config: PomodoroConfig): number => {
   if (timerState.status === "idle") {
-    return 0.26;
+    return 0;
   }
 
   if (timerState.status === "paused") {
-    const plannedDurationSeconds =
-      timerState.phaseType === "work"
-        ? config.workDurationSeconds
-        : timerState.phaseType === "short_break"
-          ? config.shortBreakDurationSeconds
-          : config.longBreakDurationSeconds;
+    if (timerState.phaseType === "procrastination") {
+      return Math.min(timerState.elapsedSeconds / 3600, 1);
+    }
 
-    return 1 - timerState.remainingSeconds / plannedDurationSeconds;
+    return 1 - timerState.remainingSeconds / timerState.plannedDurationSeconds;
   }
 
-  const plannedDurationSeconds =
-    timerState.phaseType === "work"
-      ? config.workDurationSeconds
-      : timerState.phaseType === "short_break"
-        ? config.shortBreakDurationSeconds
-        : config.longBreakDurationSeconds;
+  if (timerState.phaseType === "procrastination") {
+    return Math.min(timerState.secondsElapsed / 3600, 1);
+  }
 
-  return 1 - timerState.secondsRemaining / plannedDurationSeconds;
+  return 1 - timerState.secondsRemaining / timerState.plannedDurationSeconds;
 };
 
 const isToday = (isoDate: string): boolean => {
@@ -109,6 +121,7 @@ interface RecentActivityItem {
   title: string;
   detail: string;
   meta: string;
+  note?: string;
 }
 
 type PomodoroIconName =
@@ -203,26 +216,36 @@ const formatActivityTitle = (value: string): string =>
 export const PomodoroPanel = ({
   tasksInDev,
   upcomingDueTasks,
-  completedTodayTasks,
   timerState,
   config,
   selectedTask,
   allPomodoroSessions,
   allBreakRecords,
+  allProcrastinationRecords,
   taskSessionHistory,
   breakHistory,
+  procrastinationHistory,
   onSelectTask,
-  onOpenCompletedTask,
+  onViewAllUpcomingDue,
+  onViewAllRecentActivity,
   onStart,
-  onStartShortBreak,
+  onStartBreak,
+  onStartProcrastinating,
   onConfigChange,
   onFinish,
+  onFinishBreak,
   onPause,
   onResume,
-  onInterrupt,
-  onSkipBreak,
+  onCancel,
+  onStopProcrastinating,
   onReset
 }: PomodoroPanelProps): JSX.Element => {
+  const [isProcrastinationNoteOpen, setIsProcrastinationNoteOpen] = useState(false);
+  const [procrastinationNote, setProcrastinationNote] = useState("");
+  const [isBreakDurationOpen, setIsBreakDurationOpen] = useState(false);
+  const [breakMinutes, setBreakMinutes] = useState(() =>
+    String(Math.floor(config.shortBreakDurationSeconds / 60))
+  );
   const phaseTone = getPhaseTone(timerState);
   const phaseLabel = getPhaseLabel(timerState);
   const todayFocusSeconds = allPomodoroSessions
@@ -234,7 +257,11 @@ export const PomodoroPanel = ({
   const todayBreaksTaken = allBreakRecords.filter(
     (record) => isToday(record.startedAt) && record.action === "completed"
   ).length;
+  const todayProcrastinationSeconds = allProcrastinationRecords
+    .filter((record) => isToday(record.startedAt))
+    .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
   const todayFocusMinutes = Math.round(todayFocusSeconds / 60);
+  const todayProcrastinationMinutes = Math.round(todayProcrastinationSeconds / 60);
   const recentActivity: RecentActivityItem[] = [
     ...taskSessionHistory.map((session) => ({
       id: session.id,
@@ -252,16 +279,47 @@ export const PomodoroPanel = ({
       title: `${record.phaseType.replace("_", " ")} ${record.action}`,
       detail: formatDurationClock(record.actualDurationSeconds),
       meta: new Date(record.startedAt).toLocaleTimeString()
+    })),
+    ...procrastinationHistory.map((record) => ({
+      id: record.id,
+      startedAt: record.startedAt,
+      title: "procrastinated",
+      detail: formatDurationClock(record.actualDurationSeconds),
+      meta: new Date(record.startedAt).toLocaleTimeString(),
+      note: record.note
     }))
   ]
     .sort(
       (left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()
     )
-    .slice(0, 4);
+    .slice(0, 3);
   const activeTaskPomodoroTarget = Math.max(
     selectedTask?.estimatedPomodoros ?? config.longBreakAfterWorkSessions,
     1
   );
+  const handleStopProcrastinating = (): void => {
+    setProcrastinationNote("");
+    setIsProcrastinationNoteOpen(true);
+  };
+  const openBreakDurationModal = (): void => {
+    setBreakMinutes(String(Math.floor(config.shortBreakDurationSeconds / 60)));
+    setIsBreakDurationOpen(true);
+  };
+  const startCustomBreak = (): void => {
+    if (!selectedTask) {
+      return;
+    }
+
+    const minutes = Number.parseInt(breakMinutes, 10);
+    const safeMinutes = Number.isFinite(minutes) ? Math.min(Math.max(minutes, 1), 240) : 5;
+    onStartBreak(selectedTask.id, safeMinutes * 60);
+    setIsBreakDurationOpen(false);
+  };
+  const submitProcrastinationNote = (): void => {
+    onStopProcrastinating(procrastinationNote);
+    setIsProcrastinationNoteOpen(false);
+    setProcrastinationNote("");
+  };
 
   return (
     <section
@@ -320,12 +378,20 @@ export const PomodoroPanel = ({
                   Start focus
                 </button>
                 <button
+                  className="ghost-button focus-action-button focus-action-button--procrastinate"
+                  onClick={() => onStartProcrastinating(selectedTask.id)}
+                  type="button"
+                >
+                  <PomodoroIcon name="timer" />
+                  Procrastinate
+                </button>
+                <button
                   className="ghost-button focus-action-button"
-                  onClick={() => onStartShortBreak(selectedTask.id)}
+                  onClick={openBreakDurationModal}
                   type="button"
                 >
                   <PomodoroIcon name="cup" />
-                  Start short break
+                  Start break
                 </button>
               </>
             ) : null}
@@ -361,21 +427,50 @@ export const PomodoroPanel = ({
 
             {(timerState.status === "running" || timerState.status === "paused") &&
             (timerState.phaseType === "short_break" || timerState.phaseType === "long_break") ? (
-              <button className="ghost-button focus-action-button" onClick={onSkipBreak} type="button">
-                Skip break
+              <button className="primary-button focus-action-button focus-action-button--primary" onClick={onFinishBreak} type="button">
+                <PomodoroIcon name="check" />
+                Finish
+              </button>
+            ) : null}
+
+            {(timerState.status === "running" || timerState.status === "paused") &&
+            timerState.phaseType === "procrastination" ? (
+              <button
+                className="primary-button focus-action-button focus-action-button--primary"
+                onClick={handleStopProcrastinating}
+                type="button"
+              >
+                <PomodoroIcon name="check" />
+                Finish
               </button>
             ) : null}
 
             {timerState.status !== "idle" ? (
-              <button className="danger-button focus-action-button" onClick={onInterrupt} type="button">
-                Stop
+              <button
+                className="danger-button focus-action-button"
+                onClick={
+                  timerState.phaseType === "procrastination" ||
+                  timerState.phaseType === "short_break" ||
+                  timerState.phaseType === "long_break"
+                      ? onCancel
+                      : onCancel
+                }
+                type="button"
+              >
+                {timerState.phaseType === "procrastination" ||
+                timerState.phaseType === "short_break" ||
+                timerState.phaseType === "long_break"
+                  ? "Cancel"
+                  : "Cancel"}
               </button>
             ) : null}
 
-            <button className="ghost-button focus-action-button" onClick={onReset} type="button">
-              <PomodoroIcon name="refresh" />
-              Reset
-            </button>
+            {timerState.status !== "idle" ? (
+              <button className="ghost-button focus-action-button" onClick={onReset} type="button">
+                <PomodoroIcon name="refresh" />
+                Reset
+              </button>
+            ) : null}
           </div>
 
           <div className="focus-session-grid" aria-label="Pomodoro timing summary">
@@ -456,6 +551,16 @@ export const PomodoroPanel = ({
                 <em>You've got this</em>
               </span>
             </div>
+            <div className="focus-plan-card focus-plan-card--amber">
+              <span className="focus-plan-icon">
+                <PomodoroIcon name="timer" />
+              </span>
+              <span>
+                <small>Procrastinated</small>
+                <strong>{todayProcrastinationMinutes}m</strong>
+                <em>Logged honestly</em>
+              </span>
+            </div>
           </div>
         </section>
       </div>
@@ -508,7 +613,7 @@ export const PomodoroPanel = ({
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--deadlines">
           <div className="focus-card-header">
             <span className="focus-section-label">Upcoming Due</span>
-            <button className="focus-view-link" type="button">
+            <button className="focus-view-link" onClick={onViewAllUpcomingDue} type="button">
               View all
             </button>
           </div>
@@ -534,44 +639,10 @@ export const PomodoroPanel = ({
           </div>
         </section>
 
-        <section className="panel-card panel-stack focus-panel-card focus-panel-card--completed">
-          <div className="focus-card-header">
-            <span className="focus-section-label">Completed Today</span>
-          </div>
-
-          <div className="history-stack">
-            {completedTodayTasks.map((task) => (
-              <button
-                className="history-item history-item-button"
-                key={task.id}
-                onClick={() => onOpenCompletedTask(task.id)}
-                type="button"
-              >
-                <div>
-                  <strong>{task.title}</strong>
-                  <span>{task.updatedAt ? new Date(task.updatedAt).toLocaleTimeString() : ""}</span>
-                </div>
-                <div className="history-meta">
-                  <span>{task.pomodoroCount} done</span>
-                </div>
-              </button>
-            ))}
-            {completedTodayTasks.length === 0 ? (
-              <div className="focus-empty-compact">
-                <span className="focus-empty-icon">
-                  <PomodoroIcon name="check" />
-                </span>
-                <strong>None</strong>
-                <span>No tasks completed yet today.</span>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
         <section className="panel-card panel-stack focus-panel-card focus-panel-card--history">
           <div className="focus-card-header">
             <span className="focus-section-label">Recent Activity</span>
-            <button className="focus-view-link" type="button">
+            <button className="focus-view-link" onClick={onViewAllRecentActivity} type="button">
               View all
             </button>
           </div>
@@ -580,7 +651,10 @@ export const PomodoroPanel = ({
             {recentActivity.map((activity) => (
               <div className="focus-activity-item" key={activity.id}>
                 <span className="focus-activity-dot" />
-                <strong>{formatActivityTitle(activity.title)}</strong>
+                <div className="focus-activity-copy">
+                  <strong>{formatActivityTitle(activity.title)}</strong>
+                  {activity.note ? <span>{activity.note}</span> : null}
+                </div>
                 <time>{activity.detail}</time>
               </div>
             ))}
@@ -689,6 +763,110 @@ export const PomodoroPanel = ({
           </div>
         </section>
       </div>
+
+      {isBreakDurationOpen ? (
+        <div className="modal-overlay" role="presentation">
+          <div
+            aria-label="Start break"
+            aria-modal="true"
+            className="modal-card procrastination-note-modal"
+            role="dialog"
+          >
+            <div className="details-title">
+              <div>
+                <h3>Start Break</h3>
+                <p>How many minutes do you want?</p>
+              </div>
+            </div>
+
+            <label className="label-stack procrastination-note-field">
+              <span>Minutes</span>
+              <input
+                autoFocus
+                min={1}
+                max={240}
+                step={1}
+                type="number"
+                value={breakMinutes}
+                onChange={(event) => setBreakMinutes(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    startCustomBreak();
+                  }
+                }}
+              />
+            </label>
+
+            <div className="modal-footer procrastination-note-actions">
+              <button
+                className="ghost-button"
+                onClick={() => setIsBreakDurationOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button className="primary-button" onClick={startCustomBreak} type="button">
+                Start break
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isProcrastinationNoteOpen ? (
+        <div className="modal-overlay" role="presentation">
+          <div
+            aria-label="Procrastination note"
+            aria-modal="true"
+            className="modal-card procrastination-note-modal"
+            role="dialog"
+          >
+            <div className="details-title">
+              <div>
+                <h3>Finish Procrastinating</h3>
+                <p>What did you do?</p>
+              </div>
+            </div>
+
+            <label className="label-stack procrastination-note-field">
+              <span>Note</span>
+              <textarea
+                autoFocus
+                rows={5}
+                value={procrastinationNote}
+                onChange={(event) => setProcrastinationNote(event.target.value)}
+              />
+            </label>
+
+            <div className="modal-footer procrastination-note-actions">
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setIsProcrastinationNoteOpen(false);
+                  setProcrastinationNote("");
+                }}
+                type="button"
+              >
+                Keep timing
+              </button>
+              <button
+                className="danger-button"
+                onClick={() => {
+                  onCancel();
+                  setIsProcrastinationNoteOpen(false);
+                  setProcrastinationNote("");
+                }}
+                type="button"
+              >
+                Discard
+              </button>
+              <button className="primary-button" onClick={submitProcrastinationNote} type="button">
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 };

@@ -1,8 +1,10 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { CollectionBadge } from "../../tasks/components/CollectionBadge";
 import type { ArchivedCompletedTask } from "../domain/report-history.types";
 import type { TaskCollection } from "../../tasks/domain/task-collection.types";
 import {
+  getTaskCompletionDate,
+  getTaskDueDate,
   getTaskOverdueDays,
   isTaskCompletedOnTime,
   isTaskOverdue,
@@ -11,8 +13,11 @@ import {
 import type { Task, TaskId, TaskPriority } from "../../tasks/domain/task.types";
 import type {
   BreakRecord,
-  PomodoroSession
+  PomodoroSession,
+  ProcrastinationRecord
 } from "../../pomodoro/domain/pomodoro.types";
+
+export type ReportViewMode = "overview" | "calendar" | "trends";
 
 interface ReportPageProps {
   tasks: Task[];
@@ -22,17 +27,28 @@ interface ReportPageProps {
   archivedPomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
   archivedBreakRecords: BreakRecord[];
+  procrastinationRecords: ProcrastinationRecord[];
+  archivedProcrastinationRecords: ProcrastinationRecord[];
+  initialViewMode?: ReportViewMode;
   onOpenTask: (taskId: Task["id"], intentMode: "default" | "completed") => void;
 }
 
-type ReportViewMode = "overview" | "calendar" | "trends";
-type ReportIconName = "clock" | "check" | "rate" | "break" | "flame" | "warning" | "calendar" | "external";
+type ReportIconName =
+  | "clock"
+  | "check"
+  | "rate"
+  | "break"
+  | "flame"
+  | "warning"
+  | "calendar"
+  | "procrastination"
+  | "external";
 type MetricDirection = "up" | "down" | "neutral";
 
 interface SummaryCardMetric {
   id: string;
   icon: ReportIconName;
-  tone: "blue" | "violet" | "green" | "amber" | "cyan" | "red";
+  tone: "blue" | "violet" | "green" | "amber" | "orange" | "cyan" | "red";
   label: string;
   value: string;
   detail: string;
@@ -55,14 +71,16 @@ interface TrendPoint {
   key: string;
   focusMinutes: number;
   breakMinutes: number;
+  procrastinationMinutes: number;
   pomodoros: number;
 }
 
 interface MonthlyTaskSummary {
   taskCount: number;
+  completedCount: number;
   completedOnTimeCount: number;
   overdueDaysTotal: number;
-  behindScheduleCount: number;
+  openOverdueCount: number;
   completedLateCount: number;
   notStartedCount: number;
 }
@@ -85,6 +103,24 @@ interface ActivityInsight {
   value: string;
   detail: string;
   tone: "violet" | "blue" | "green";
+}
+
+interface ProcrastinationReportEntry {
+  id: string;
+  taskTitle: string;
+  dateLabel: string;
+  timeLabel: string;
+  durationSeconds: number;
+  note: string;
+  startedAt: string;
+}
+
+interface TrendDetailCard {
+  id: string;
+  label: string;
+  value: string;
+  detail: string;
+  tone: "blue" | "orange" | "red" | "violet";
 }
 
 const priorityOrder: Record<TaskPriority, number> = {
@@ -159,6 +195,16 @@ const ReportIcon = ({ name }: { name: ReportIconName }): JSX.Element => {
           <path d="M4 10h16" />
         </svg>
       );
+    case "procrastination":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M8 3h8" />
+          <path d="M8 21h8" />
+          <path d="M9 3c0 4 6 5 6 9s-6 5-6 9" />
+          <path d="M15 3c0 4-6 5-6 9s6 5 6 9" />
+          <path d="M10 17h4" />
+        </svg>
+      );
     case "external":
       return (
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -202,6 +248,9 @@ const formatMetricDuration = (seconds: number): string => {
 
 const formatMinutesDuration = (minutes: number): string => formatMetricDuration(minutes * 60);
 
+const formatAxisDuration = (minutes: number): string =>
+  minutes === 0 ? "0m" : formatMinutesDuration(minutes);
+
 const formatMonthLabel = (value: Date): string =>
   value.toLocaleDateString(undefined, {
     month: "long",
@@ -238,11 +287,49 @@ const getPercentDelta = (current: number, previous: number): number => {
   return Math.round(((current - previous) / previous) * 100);
 };
 
-const formatPercentDelta = (current: number, previous: number): string =>
-  `${Math.abs(getPercentDelta(current, previous))}% vs last month`;
+const getDeltaDirection = (
+  current: number,
+  previous: number,
+  isLowerBetter = false
+): MetricDirection => {
+  if (current === previous) {
+    return "neutral";
+  }
 
-const formatCountDelta = (current: number, previous: number, unit: string): string =>
-  `${Math.abs(current - previous)} ${unit} vs last month`;
+  const movedUp = current > previous;
+
+  return movedUp === !isLowerBetter ? "up" : "down";
+};
+
+const formatPercentDelta = (current: number, previous: number): string => {
+  const delta = Math.abs(getPercentDelta(current, previous));
+
+  if (delta === 0) {
+    return "No change from last month";
+  }
+
+  return `${current > previous ? "Up" : "Down"} ${delta}% from last month`;
+};
+
+const formatCountDelta = (current: number, previous: number, unit: string): string => {
+  const delta = Math.abs(current - previous);
+
+  if (delta === 0) {
+    return "No change from last month";
+  }
+
+  return `${current > previous ? "Up" : "Down"} ${delta} ${unit} from last month`;
+};
+
+const formatDurationDelta = (current: number, previous: number): string => {
+  const delta = Math.abs(current - previous);
+
+  if (delta === 0) {
+    return "No change from last month";
+  }
+
+  return `${current > previous ? "Up" : "Down"} ${formatMetricDuration(delta)} from last month`;
+};
 
 const compareTasks = (left: ReportTaskItem, right: ReportTaskItem): number => {
   const priorityComparison = priorityOrder[left.priority] - priorityOrder[right.priority];
@@ -370,7 +457,8 @@ const groupCalendarWeeks = (calendarDays: CalendarDayData[]): CalendarDayData[][
 const getMonthTrendData = (
   month: Date,
   pomodoroSessions: PomodoroSession[],
-  breakRecords: BreakRecord[]
+  breakRecords: BreakRecord[],
+  procrastinationRecords: ProcrastinationRecord[]
 ): TrendPoint[] => {
   const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
   const totalsByDay = new Map<number, TrendPoint>();
@@ -383,6 +471,7 @@ const getMonthTrendData = (
       key: toLocalDateKey(date),
       focusMinutes: 0,
       breakMinutes: 0,
+      procrastinationMinutes: 0,
       pomodoros: 0
     });
   });
@@ -430,6 +519,27 @@ const getMonthTrendData = (
     point.breakMinutes = Math.round(point.breakMinutes + record.actualDurationSeconds / 60);
   });
 
+  procrastinationRecords.forEach((record) => {
+    const procrastinationDate = new Date(record.startedAt);
+    const procrastinationKey = `${procrastinationDate.getFullYear()}-${String(
+      procrastinationDate.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+    if (procrastinationKey !== monthKey) {
+      return;
+    }
+
+    const point = totalsByDay.get(procrastinationDate.getDate());
+
+    if (!point) {
+      return;
+    }
+
+    point.procrastinationMinutes = Math.round(
+      point.procrastinationMinutes + record.actualDurationSeconds / 60
+    );
+  });
+
   return Array.from(totalsByDay.values());
 };
 
@@ -468,27 +578,66 @@ const getTaskBadgeColor = (
 ): string =>
   task.collectionColor ?? priorityColors[task.priority];
 
+const mergeUniqueTasks = (...taskGroups: ReportTaskItem[][]): ReportTaskItem[] => {
+  const mergedTasks = new Map<string, ReportTaskItem>();
+
+  taskGroups.flat().forEach((task) => {
+    mergedTasks.set(task.id, task);
+  });
+
+  return Array.from(mergedTasks.values());
+};
+
+const wasTaskLateDuringMonth = (
+  task: ReportTaskItem,
+  month: Date,
+  referenceDate: Date
+): boolean => {
+  const dueDate = getTaskDueDate(task);
+
+  if (!dueDate) {
+    return false;
+  }
+
+  const monthStart = startOfMonth(month);
+  const monthEnd = getMonthEndExclusive(month);
+
+  if (dueDate >= monthEnd) {
+    return false;
+  }
+
+  const completionDate = getTaskCompletionDate(task);
+
+  if (completionDate) {
+    return completionDate > dueDate && completionDate >= monthStart;
+  }
+
+  return referenceDate >= monthStart && referenceDate > dueDate;
+};
+
 const buildMonthlyTaskSummary = (
   tasks: ReportTaskItem[],
   month: Date,
   referenceDate: Date
 ): MonthlyTaskSummary => {
   const monthTasks = tasks.filter((task) => isTaskScheduledInMonth(task, month));
-  const behindScheduleCount = monthTasks.filter((task) => isTaskOverdue(task, referenceDate)).length;
-  const completedLateCount = monthTasks.filter(
-    (task) => task.completedAt !== null && isTaskOverdue(task, referenceDate)
-  ).length;
+  const lateTasksInMonth = tasks.filter((task) => wasTaskLateDuringMonth(task, month, referenceDate));
+  const openOverdueTasks = lateTasksInMonth.filter((task) => task.completedAt === null);
+  const completedLateTasks = lateTasksInMonth.filter((task) => task.completedAt !== null);
+  const reportableTasks = mergeUniqueTasks(monthTasks, openOverdueTasks, completedLateTasks);
+  const completedTasks = reportableTasks.filter((task) => task.completedAt !== null);
 
   return {
-    taskCount: monthTasks.length,
-    completedOnTimeCount: monthTasks.filter((task) => isTaskCompletedOnTime(task)).length,
-    overdueDaysTotal: monthTasks.reduce(
+    taskCount: reportableTasks.length,
+    completedCount: completedTasks.length,
+    completedOnTimeCount: completedTasks.filter((task) => isTaskCompletedOnTime(task)).length,
+    overdueDaysTotal: lateTasksInMonth.reduce(
       (sum, task) => sum + getTaskOverdueDays(task, referenceDate),
       0
     ),
-    behindScheduleCount,
-    completedLateCount,
-    notStartedCount: monthTasks.filter((task) => task.completedAt === null && !isTaskOverdue(task, referenceDate)).length
+    openOverdueCount: openOverdueTasks.length,
+    completedLateCount: completedLateTasks.length,
+    notStartedCount: reportableTasks.filter((task) => task.completedAt === null && !isTaskOverdue(task, referenceDate)).length
   };
 };
 
@@ -507,6 +656,19 @@ const sumBreakSecondsInMonth = (records: BreakRecord[], month: Date): number =>
   records
     .filter((record) => isInMonth(record.startedAt, month))
     .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
+
+const sumProcrastinationSecondsInMonth = (
+  records: ProcrastinationRecord[],
+  month: Date
+): number =>
+  records
+    .filter((record) => isInMonth(record.startedAt, month))
+    .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
+
+const countProcrastinationRecordsInMonth = (
+  records: ProcrastinationRecord[],
+  month: Date
+): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
 
 const getCompletedSessionDayKeys = (sessions: PomodoroSession[]): Set<string> => {
   const keys = new Set<string>();
@@ -572,6 +734,26 @@ const getActivityIntensity = (pomodoros: number, maxPomodoros: number): number =
   }
 
   if (pomodoros >= Math.ceil(maxPomodoros * 0.35)) {
+    return 2;
+  }
+
+  return 1;
+};
+
+const getProcrastinationIntensity = (minutes: number, maxMinutes: number): number => {
+  if (minutes === 0) {
+    return 0;
+  }
+
+  if (maxMinutes <= 1) {
+    return 1;
+  }
+
+  if (minutes >= Math.ceil(maxMinutes * 0.7)) {
+    return 3;
+  }
+
+  if (minutes >= Math.ceil(maxMinutes * 0.35)) {
     return 2;
   }
 
@@ -682,17 +864,25 @@ export const ReportPage = ({
   archivedPomodoroSessions,
   breakRecords,
   archivedBreakRecords,
+  procrastinationRecords,
+  archivedProcrastinationRecords,
+  initialViewMode = "overview",
   onOpenTask
 }: ReportPageProps): JSX.Element => {
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => startOfMonth(new Date()));
-  const [viewMode, setViewMode] = useState<ReportViewMode>("overview");
+  const [viewMode, setViewMode] = useState<ReportViewMode>(initialViewMode);
   const [selectedCalendarDay, setSelectedCalendarDay] =
     useState<CalendarDayData | null>(null);
-  const [behindScheduleDetails, setBehindScheduleDetails] =
+  const [openOverdueDetails, setOpenOverdueDetails] =
     useState<ReportTaskItem[] | null>(null);
   const [selectedTrendDay, setSelectedTrendDay] = useState<number>(() =>
     Math.min(14, getDaysInMonth(new Date()))
   );
+
+  useEffect(() => {
+    setViewMode(initialViewMode);
+  }, [initialViewMode]);
+
   const reportTasks = useMemo(
     () => buildReportTaskItems(tasks, archivedCompletedTasks, taskCollections),
     [archivedCompletedTasks, taskCollections, tasks]
@@ -705,6 +895,19 @@ export const ReportPage = ({
     () => [...breakRecords, ...archivedBreakRecords],
     [archivedBreakRecords, breakRecords]
   );
+  const allProcrastinationRecords = useMemo(
+    () => [...procrastinationRecords, ...archivedProcrastinationRecords],
+    [archivedProcrastinationRecords, procrastinationRecords]
+  );
+  const taskTitleById = useMemo(
+    () =>
+      new Map(
+        reportTasks.history.flatMap((task) =>
+          task.taskId === null ? [] : ([[task.taskId, task.title]] as const)
+        )
+      ),
+    [reportTasks.history]
+  );
   const priorMonth = addMonths(visibleMonth, -1);
   const referenceDate = new Date();
   const monthlyTaskSummary = useMemo(
@@ -715,12 +918,12 @@ export const ReportPage = ({
     () => buildMonthlyTaskSummary(reportTasks.history, priorMonth, referenceDate),
     [priorMonth, reportTasks.history]
   );
-  const behindScheduleTasks = useMemo(
+  const openOverdueTasks = useMemo(
     () =>
       reportTasks.history
         .filter(
           (task) =>
-            isTaskScheduledInMonth(task, visibleMonth) && isTaskOverdue(task, referenceDate)
+            task.completedAt === null && wasTaskLateDuringMonth(task, visibleMonth, referenceDate)
         )
         .slice()
         .sort((left, right) => {
@@ -747,8 +950,44 @@ export const ReportPage = ({
   );
   const calendarWeeks = useMemo(() => groupCalendarWeeks(calendarDays), [calendarDays]);
   const trendData = useMemo(
-    () => getMonthTrendData(visibleMonth, allPomodoroSessions, allBreakRecords),
-    [allBreakRecords, allPomodoroSessions, visibleMonth]
+    () =>
+      getMonthTrendData(
+        visibleMonth,
+        allPomodoroSessions,
+        allBreakRecords,
+        allProcrastinationRecords
+      ),
+    [allBreakRecords, allPomodoroSessions, allProcrastinationRecords, visibleMonth]
+  );
+  const monthlyProcrastinationEntries = useMemo<ProcrastinationReportEntry[]>(
+    () =>
+      allProcrastinationRecords
+        .filter((record) => isInMonth(record.startedAt, visibleMonth))
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()
+        )
+        .map((record) => {
+          const startedAt = new Date(record.startedAt);
+
+          return {
+            id: record.id,
+            taskTitle: taskTitleById.get(record.taskId) ?? "Archived task",
+            dateLabel: startedAt.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric"
+            }),
+            timeLabel: startedAt.toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit"
+            }),
+            durationSeconds: record.actualDurationSeconds,
+            note: record.note.trim(),
+            startedAt: record.startedAt
+          };
+        }),
+    [allProcrastinationRecords, taskTitleById, visibleMonth]
   );
   const monthSessions = useMemo(
     () => allPomodoroSessions.filter((session) => isInMonth(session.startedAt, visibleMonth)),
@@ -765,16 +1004,28 @@ export const ReportPage = ({
   const priorCompletedTasks = countCompletedTasksInMonth(reportTasks.history, priorMonth);
   const completionRate =
     monthlyTaskSummary.taskCount > 0
-      ? Math.round((monthlyTaskSummary.completedOnTimeCount / monthlyTaskSummary.taskCount) * 100)
+      ? Math.round((monthlyTaskSummary.completedCount / monthlyTaskSummary.taskCount) * 100)
       : 0;
   const priorCompletionRate =
     priorMonthlyTaskSummary.taskCount > 0
       ? Math.round(
-          (priorMonthlyTaskSummary.completedOnTimeCount / priorMonthlyTaskSummary.taskCount) * 100
+          (priorMonthlyTaskSummary.completedCount / priorMonthlyTaskSummary.taskCount) * 100
         )
       : 0;
   const breakSeconds = sumBreakSecondsInMonth(allBreakRecords, visibleMonth);
   const priorBreakSeconds = sumBreakSecondsInMonth(allBreakRecords, priorMonth);
+  const procrastinationSeconds = sumProcrastinationSecondsInMonth(
+    allProcrastinationRecords,
+    visibleMonth
+  );
+  const priorProcrastinationSeconds = sumProcrastinationSecondsInMonth(
+    allProcrastinationRecords,
+    priorMonth
+  );
+  const procrastinationEntries = countProcrastinationRecordsInMonth(
+    allProcrastinationRecords,
+    visibleMonth
+  );
   const currentStreak = getCurrentStreak(allPomodoroSessions, referenceDate);
   const bestStreak = getBestStreak(allPomodoroSessions);
   const priorStreak = getCurrentStreak(allPomodoroSessions, addMonths(referenceDate, -1));
@@ -787,7 +1038,7 @@ export const ReportPage = ({
       value: formatMetricDuration(focusSeconds),
       detail: `${completedPomodoros} pomodoros`,
       delta: formatPercentDelta(focusSeconds, priorFocusSeconds),
-      direction: focusSeconds >= priorFocusSeconds ? "up" : "down"
+      direction: getDeltaDirection(focusSeconds, priorFocusSeconds)
     },
     {
       id: "tasks",
@@ -795,9 +1046,9 @@ export const ReportPage = ({
       tone: "violet",
       label: "Tasks completed",
       value: String(completedTasks),
-      detail: `${completionRate}% on time`,
+      detail: `${completionRate}% complete`,
       delta: formatPercentDelta(completedTasks, priorCompletedTasks),
-      direction: completedTasks >= priorCompletedTasks ? "up" : "down"
+      direction: getDeltaDirection(completedTasks, priorCompletedTasks)
     },
     {
       id: "completion-rate",
@@ -805,9 +1056,9 @@ export const ReportPage = ({
       tone: "green",
       label: "Completion rate",
       value: `${completionRate}%`,
-      detail: `${monthlyTaskSummary.completedOnTimeCount} on-time tasks`,
+      detail: `${monthlyTaskSummary.completedCount} of ${monthlyTaskSummary.taskCount} tasks done`,
       delta: formatCountDelta(completionRate, priorCompletionRate, "pts"),
-      direction: completionRate >= priorCompletionRate ? "up" : "down"
+      direction: getDeltaDirection(completionRate, priorCompletionRate)
     },
     {
       id: "break-time",
@@ -817,7 +1068,17 @@ export const ReportPage = ({
       value: formatMetricDuration(breakSeconds),
       detail: "Healthy pacing",
       delta: formatPercentDelta(breakSeconds, priorBreakSeconds),
-      direction: breakSeconds >= priorBreakSeconds ? "up" : "down"
+      direction: getDeltaDirection(breakSeconds, priorBreakSeconds)
+    },
+    {
+      id: "procrastination",
+      icon: "procrastination",
+      tone: "orange",
+      label: "Time procrastinated",
+      value: formatMetricDuration(procrastinationSeconds),
+      detail: `${procrastinationEntries} ${procrastinationEntries === 1 ? "entry" : "entries"}`,
+      delta: formatDurationDelta(procrastinationSeconds, priorProcrastinationSeconds),
+      direction: getDeltaDirection(procrastinationSeconds, priorProcrastinationSeconds, true)
     },
     {
       id: "streak",
@@ -827,37 +1088,44 @@ export const ReportPage = ({
       value: `${currentStreak}`,
       detail: `Best: ${bestStreak} days`,
       delta: formatCountDelta(currentStreak, priorStreak, "days"),
-      direction: currentStreak >= priorStreak ? "up" : "down"
+      direction: getDeltaDirection(currentStreak, priorStreak)
     },
     {
       id: "overdue",
       icon: "warning",
       tone: "red",
-      label: "Overdue tasks",
-      value: String(monthlyTaskSummary.behindScheduleCount),
+      label: "Open overdue",
+      value: String(monthlyTaskSummary.openOverdueCount),
       detail:
-        monthlyTaskSummary.behindScheduleCount < priorMonthlyTaskSummary.behindScheduleCount
-          ? `${priorMonthlyTaskSummary.behindScheduleCount - monthlyTaskSummary.behindScheduleCount} improved this month`
-          : `${monthlyTaskSummary.behindScheduleCount - priorMonthlyTaskSummary.behindScheduleCount} added this month`,
+        monthlyTaskSummary.openOverdueCount < priorMonthlyTaskSummary.openOverdueCount
+          ? `${priorMonthlyTaskSummary.openOverdueCount - monthlyTaskSummary.openOverdueCount} improved this month`
+          : monthlyTaskSummary.openOverdueCount > priorMonthlyTaskSummary.openOverdueCount
+            ? `${monthlyTaskSummary.openOverdueCount - priorMonthlyTaskSummary.openOverdueCount} added this month`
+            : "No change this month",
       delta: formatCountDelta(
-        monthlyTaskSummary.behindScheduleCount,
-        priorMonthlyTaskSummary.behindScheduleCount,
+        monthlyTaskSummary.openOverdueCount,
+        priorMonthlyTaskSummary.openOverdueCount,
         "tasks"
       ),
-      direction:
-        monthlyTaskSummary.behindScheduleCount <= priorMonthlyTaskSummary.behindScheduleCount
-          ? "up"
-          : "down"
+      direction: getDeltaDirection(
+        monthlyTaskSummary.openOverdueCount,
+        priorMonthlyTaskSummary.openOverdueCount,
+        true
+      )
     }
   ];
   const focusMinutesSeries = trendData.map((point) => point.focusMinutes);
   const breakMinutesSeries = trendData.map((point) => point.breakMinutes);
-  const pomodoroSeries = trendData.map((point) => point.pomodoros);
-  const leftAxisMax = Math.max(60, ...focusMinutesSeries, ...breakMinutesSeries);
-  const rightAxisMax = Math.max(1, ...pomodoroSeries);
+  const procrastinationMinutesSeries = trendData.map((point) => point.procrastinationMinutes);
+  const leftAxisMax = Math.max(
+    60,
+    ...focusMinutesSeries,
+    ...breakMinutesSeries,
+    ...procrastinationMinutesSeries
+  );
   const chartPadding = {
     top: 24,
-    right: 52,
+    right: 20,
     bottom: 32,
     left: 48
   };
@@ -877,9 +1145,9 @@ export const ReportPage = ({
     chartHeight,
     chartPadding
   );
-  const pomodoroPath = buildLinePath(
-    pomodoroSeries,
-    rightAxisMax,
+  const procrastinationPath = buildLinePath(
+    procrastinationMinutesSeries,
+    leftAxisMax,
     chartWidth,
     chartHeight,
     chartPadding
@@ -897,18 +1165,86 @@ export const ReportPage = ({
       : chartPadding.top +
         usableHeight -
         (selectedTrendPoint.focusMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
+  const heaviestProcrastinationPoint = trendData.reduce<TrendPoint | null>(
+    (heaviest, point) =>
+      !heaviest || point.procrastinationMinutes > heaviest.procrastinationMinutes
+        ? point
+        : heaviest,
+    null
+  );
+  const longestProcrastinationEntry = monthlyProcrastinationEntries.reduce<
+    ProcrastinationReportEntry | null
+  >(
+    (longest, entry) =>
+      !longest || entry.durationSeconds > longest.durationSeconds ? entry : longest,
+    null
+  );
+  const trackedWorkSeconds = focusSeconds + procrastinationSeconds;
+  const focusBalance =
+    trackedWorkSeconds > 0 ? Math.round((focusSeconds / trackedWorkSeconds) * 100) : 0;
+  const notesCaptured = monthlyProcrastinationEntries.filter((entry) => entry.note.length > 0).length;
+  const trendDetailCards: TrendDetailCard[] = [
+    {
+      id: "focus-balance",
+      label: "Focus balance",
+      value: `${focusBalance}%`,
+      detail: `${formatMetricDuration(focusSeconds)} focus / ${formatMetricDuration(procrastinationSeconds)} procrastination`,
+      tone: "blue"
+    },
+    {
+      id: "peak-procrastination",
+      label: "Peak procrastination day",
+      value:
+        heaviestProcrastinationPoint && heaviestProcrastinationPoint.procrastinationMinutes > 0
+          ? `${visibleMonth.toLocaleDateString(undefined, { month: "short" })} ${heaviestProcrastinationPoint.day}`
+          : "None",
+      detail:
+        heaviestProcrastinationPoint && heaviestProcrastinationPoint.procrastinationMinutes > 0
+          ? formatMinutesDuration(heaviestProcrastinationPoint.procrastinationMinutes)
+          : "No entries this month",
+      tone: "orange"
+    },
+    {
+      id: "longest-entry",
+      label: "Longest entry",
+      value: longestProcrastinationEntry
+        ? formatMetricDuration(longestProcrastinationEntry.durationSeconds)
+        : "0m",
+      detail: longestProcrastinationEntry
+        ? `${longestProcrastinationEntry.dateLabel} - ${longestProcrastinationEntry.taskTitle}`
+        : "No entries this month",
+      tone: "red"
+    },
+    {
+      id: "notes-captured",
+      label: "Notes captured",
+      value: `${notesCaptured} / ${monthlyProcrastinationEntries.length}`,
+      detail:
+        monthlyProcrastinationEntries.length > 0
+          ? `${Math.round((notesCaptured / monthlyProcrastinationEntries.length) * 100)}% with notes`
+          : "No entries this month",
+      tone: "violet"
+    }
+  ];
   const monthActivityDays = calendarDays.filter((day) => day.isCurrentMonth);
   const maxPomodoros = Math.max(1, ...monthActivityDays.map((day) => day.completedPomodoros));
+  const procrastinationMinutesByDay = new Map(
+    trendData.map((point) => [point.key, point.procrastinationMinutes])
+  );
+  const maxProcrastinationMinutes = Math.max(
+    1,
+    ...trendData.map((point) => point.procrastinationMinutes)
+  );
   const insights = buildInsights(visibleMonth, trendData, monthSessions, priorMonthSessions);
   const totalHealth = Math.max(monthlyTaskSummary.taskCount, 1);
   const onTimePercent = Math.round((monthlyTaskSummary.completedOnTimeCount / totalHealth) * 100);
-  const behindPercent = Math.round((monthlyTaskSummary.behindScheduleCount / totalHealth) * 100);
+  const openOverduePercent = Math.round((monthlyTaskSummary.openOverdueCount / totalHealth) * 100);
   const overduePercent = Math.round((monthlyTaskSummary.completedLateCount / totalHealth) * 100);
-  const notStartedPercent = Math.max(0, 100 - onTimePercent - behindPercent - overduePercent);
+  const notStartedPercent = Math.max(0, 100 - onTimePercent - openOverduePercent - overduePercent);
   const donutStyle = {
     "--on-time-deg": `${onTimePercent * 3.6}deg`,
-    "--behind-deg": `${(onTimePercent + behindPercent) * 3.6}deg`,
-    "--overdue-deg": `${(onTimePercent + behindPercent + overduePercent) * 3.6}deg`
+    "--behind-deg": `${(onTimePercent + openOverduePercent) * 3.6}deg`,
+    "--overdue-deg": `${(onTimePercent + openOverduePercent + overduePercent) * 3.6}deg`
   } as CSSProperties;
 
   const chartSection = (
@@ -916,20 +1252,20 @@ export const ReportPage = ({
       <div className="report-section-header">
         <div>
           <h2>Monthly Trends</h2>
-          <p>Daily overview of your focus, pomodoros, and break time.</p>
+          <p>Daily overview of your focus, break, and procrastination time.</p>
         </div>
         <div className="report-graph-legend">
           <div className="report-graph-legend-item report-graph-legend-item--focus">
             <span className="report-graph-dot" />
             <strong>Focus time</strong>
           </div>
-          <div className="report-graph-legend-item report-graph-legend-item--pomodoros">
-            <span className="report-graph-dot" />
-            <strong>Pomodoros</strong>
-          </div>
           <div className="report-graph-legend-item report-graph-legend-item--breaks">
             <span className="report-graph-dot" />
             <strong>Break time</strong>
+          </div>
+          <div className="report-graph-legend-item report-graph-legend-item--procrastination">
+            <span className="report-graph-dot" />
+            <strong>Procrastination</strong>
           </div>
         </div>
       </div>
@@ -945,8 +1281,7 @@ export const ReportPage = ({
             const y =
               chartPadding.top +
               ((chartHeight - chartPadding.top - chartPadding.bottom) * index) / 4;
-            const leftAxisValue = Math.round((leftAxisMax - (leftAxisMax * index) / 4) / 60);
-            const rightAxisValue = Math.round(rightAxisMax - (rightAxisMax * index) / 4);
+            const leftAxisValue = Math.round(leftAxisMax - (leftAxisMax * index) / 4);
 
             return (
               <g key={`grid-${index}`}>
@@ -958,15 +1293,7 @@ export const ReportPage = ({
                   y2={y}
                 />
                 <text className="report-trend-axis-label" x={12} y={y + 4}>
-                  {leftAxisValue}h
-                </text>
-                <text
-                  className="report-trend-axis-label report-trend-axis-label--right"
-                  textAnchor="end"
-                  x={chartWidth - 8}
-                  y={y + 4}
-                >
-                  {rightAxisValue}
+                  {formatAxisDuration(leftAxisValue)}
                 </text>
               </g>
             );
@@ -1002,7 +1329,7 @@ export const ReportPage = ({
               />
               <foreignObject
                 className="report-trend-tooltip-wrap"
-                height="88"
+                height="108"
                 width="170"
                 x={Math.min(selectedTrendX + 16, chartWidth - 220)}
                 y={Math.max(8, selectedTrendFocusY - 74)}
@@ -1015,14 +1342,18 @@ export const ReportPage = ({
                   <span>Focus time {formatMinutesDuration(selectedTrendPoint.focusMinutes)}</span>
                   <span>Pomodoros {selectedTrendPoint.pomodoros}</span>
                   <span>Break time {formatMinutesDuration(selectedTrendPoint.breakMinutes)}</span>
+                  <span>
+                    Procrastination{" "}
+                    {formatMinutesDuration(selectedTrendPoint.procrastinationMinutes)}
+                  </span>
                 </div>
               </foreignObject>
             </g>
           ) : null}
 
           <path className="report-trend-line report-trend-line--focus" d={focusPath} />
-          <path className="report-trend-line report-trend-line--pomodoros" d={pomodoroPath} />
           <path className="report-trend-line report-trend-line--breaks" d={breakPath} />
+          <path className="report-trend-line report-trend-line--procrastination" d={procrastinationPath} />
 
           {trendData.map((point, index) => {
             const x =
@@ -1036,16 +1367,16 @@ export const ReportPage = ({
               chartPadding.top +
               usableHeight -
               (point.breakMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
-            const pomodoroY =
+            const procrastinationY =
               chartPadding.top +
               usableHeight -
-              (point.pomodoros / Math.max(rightAxisMax, 1)) * usableHeight;
+              (point.procrastinationMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
 
             return (
               <g key={`point-${point.day}`} onMouseEnter={() => setSelectedTrendDay(point.day)}>
                 <circle className="report-trend-point report-trend-point--focus" cx={x} cy={focusY} r="4" />
-                <circle className="report-trend-point report-trend-point--pomodoros" cx={x} cy={pomodoroY} r="4" />
                 <circle className="report-trend-point report-trend-point--breaks" cx={x} cy={breakY} r="4" />
+                <circle className="report-trend-point report-trend-point--procrastination" cx={x} cy={procrastinationY} r="4" />
                 <rect
                   className="report-trend-hit-area"
                   height={chartHeight - chartPadding.top - chartPadding.bottom}
@@ -1062,7 +1393,7 @@ export const ReportPage = ({
   );
 
   return (
-    <section className="report-shell">
+    <section className={`report-shell report-shell--${viewMode}`}>
       <div className="report-controls-row">
         <div className="report-calendar-nav report-calendar-nav--month">
           <button className="report-month-button" type="button">
@@ -1240,7 +1571,81 @@ export const ReportPage = ({
           </div>
         </section>
       ) : viewMode === "trends" ? (
-        chartSection
+        <div className="report-trends-tab">
+          <div className="report-trends-tab-grid">
+            {chartSection}
+
+            <section className="report-panel report-procrastination-panel">
+              <div className="report-section-header">
+                <div>
+                  <h2>Procrastination Log</h2>
+                  <p>
+                    {formatMonthLabel(visibleMonth)} - {formatMetricDuration(procrastinationSeconds)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="report-procrastination-summary">
+                <span>
+                  <strong>{monthlyProcrastinationEntries.length}</strong>
+                  entries
+                </span>
+                <span>
+                  <strong>
+                    {monthlyProcrastinationEntries.length > 0
+                      ? formatMetricDuration(
+                          Math.round(
+                            procrastinationSeconds / monthlyProcrastinationEntries.length
+                          )
+                        )
+                      : "0m"}
+                  </strong>
+                  avg
+                </span>
+                <span>
+                  <strong>{notesCaptured}</strong>
+                  notes
+                </span>
+              </div>
+
+              {monthlyProcrastinationEntries.length > 0 ? (
+                <div className="report-procrastination-list">
+                  {monthlyProcrastinationEntries.map((entry) => (
+                    <article className="report-procrastination-entry" key={entry.id}>
+                      <div className="report-procrastination-entry-time">
+                        <strong>{formatMetricDuration(entry.durationSeconds)}</strong>
+                        <span>
+                          {entry.dateLabel} - {entry.timeLabel}
+                        </span>
+                      </div>
+                      <div className="report-procrastination-entry-copy">
+                        <span>{entry.taskTitle}</span>
+                        <p>{entry.note.length > 0 ? entry.note : "No note"}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="report-procrastination-empty">
+                  No procrastination recorded this month.
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div className="report-trend-detail-grid">
+            {trendDetailCards.map((card) => (
+              <article
+                className={`report-trend-detail-card report-trend-detail-card--${card.tone}`}
+                key={card.id}
+              >
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+                <p>{card.detail}</p>
+              </article>
+            ))}
+          </div>
+        </div>
       ) : (
         <>
           <div className="report-main-grid">
@@ -1266,18 +1671,18 @@ export const ReportPage = ({
                   <em>{formatPercentDelta(monthlyTaskSummary.completedOnTimeCount, priorMonthlyTaskSummary.completedOnTimeCount)}</em>
                 </article>
                 <article className="report-snapshot-card report-snapshot-card--amber">
-                  <span>Overdue days passed</span>
+                  <span>Total overdue days</span>
                   <strong>{monthlyTaskSummary.overdueDaysTotal} days</strong>
                   <em>{formatPercentDelta(monthlyTaskSummary.overdueDaysTotal, priorMonthlyTaskSummary.overdueDaysTotal)}</em>
                 </article>
                 <button
                   className="report-snapshot-card report-snapshot-card--red"
-                  onClick={() => setBehindScheduleDetails(behindScheduleTasks)}
+                  onClick={() => setOpenOverdueDetails(openOverdueTasks)}
                   type="button"
                 >
-                  <span>Behind schedule</span>
-                  <strong>{monthlyTaskSummary.behindScheduleCount} tasks</strong>
-                  <em>{formatCountDelta(monthlyTaskSummary.behindScheduleCount, priorMonthlyTaskSummary.behindScheduleCount, "tasks")}</em>
+                  <span>Open overdue</span>
+                  <strong>{monthlyTaskSummary.openOverdueCount} tasks</strong>
+                  <em>{formatCountDelta(monthlyTaskSummary.openOverdueCount, priorMonthlyTaskSummary.openOverdueCount, "tasks")}</em>
                 </button>
               </div>
 
@@ -1291,8 +1696,8 @@ export const ReportPage = ({
                   <div className="report-health-list">
                     {[
                       ["On time", monthlyTaskSummary.completedOnTimeCount, onTimePercent, "green"],
-                      ["Behind schedule", monthlyTaskSummary.behindScheduleCount, behindPercent, "red"],
-                      ["Overdue", monthlyTaskSummary.completedLateCount, overduePercent, "amber"],
+                      ["Open overdue", monthlyTaskSummary.openOverdueCount, openOverduePercent, "red"],
+                      ["Completed late", monthlyTaskSummary.completedLateCount, overduePercent, "amber"],
                       ["Not started", monthlyTaskSummary.notStartedCount, notStartedPercent, "muted"]
                     ].map(([label, value, percent, tone]) => (
                       <div className={`report-health-row report-health-row--${tone}`} key={String(label)}>
@@ -1317,7 +1722,7 @@ export const ReportPage = ({
                 <div className="report-section-header">
                   <div>
                     <h2>Activity Calendar</h2>
-                    <p>Daily activity intensity based on focus time.</p>
+                    <p>Daily intensity for focus and procrastination.</p>
                   </div>
                 </div>
                 <div className="report-activity-month">
@@ -1350,47 +1755,94 @@ export const ReportPage = ({
                     ["No activity", 0]
                   ].map(([label, intensity]) => (
                     <span className={`report-activity-legend-item intensity-${intensity}`} key={String(label)}>
-                      <i />
+                      <span className="report-activity-legend-swatches" aria-hidden="true">
+                        <i className="report-activity-legend-dot report-activity-legend-dot--focus" />
+                        <i className="report-activity-legend-dot report-activity-legend-dot--procrastination" />
+                      </span>
                       {label}
                     </span>
                   ))}
                 </div>
 
-                <div className="report-heatmap" style={{ "--day-count": getDaysInMonth(visibleMonth) } as CSSProperties}>
-                  <div className="report-heatmap-day-header" />
-                  {Array.from({ length: getDaysInMonth(visibleMonth) }, (_, index) => (
-                    <span className="report-heatmap-day-number" key={`header-${index + 1}`}>
-                      {index + 1}
-                    </span>
-                  ))}
-                  {weekdayLabels.map((weekday, weekdayIndex) => (
-                    <div className="report-heatmap-row" key={weekday}>
-                      <span className="report-heatmap-weekday">{weekday.toUpperCase()}</span>
-                      {monthActivityDays.map((day) => {
-                        const intensity = getActivityIntensity(day.completedPomodoros, maxPomodoros);
-                        const isActiveWeekday = day.date.getDay() === weekdayIndex;
+                <div className="report-activity-calendars">
+                  <div className="report-activity-calendar-block">
+                    <span className="report-activity-calendar-title">Focus</span>
+                    <div className="report-month-activity-calendar">
+                      <div className="report-month-activity-weekdays">
+                        {weekdayLabels.map((weekday) => (
+                          <span key={weekday}>{weekday[0]}</span>
+                        ))}
+                      </div>
+                      <div className="report-month-activity-grid">
+                        {calendarWeeks.flat().map((day) => {
+                          const intensity = day.isCurrentMonth
+                            ? getActivityIntensity(day.completedPomodoros, maxPomodoros)
+                            : "outside";
 
-                        return (
-                          <button
-                            aria-label={`${day.date.toLocaleDateString()} activity`}
-                            className={[
-                              "report-heatmap-cell",
-                              `intensity-${isActiveWeekday ? intensity : "empty"}`,
-                              day.isToday && isActiveWeekday ? "is-today" : ""
-                            ].join(" ")}
-                            disabled={!isActiveWeekday}
-                            key={`${weekday}-${day.key}`}
-                            onClick={() => setSelectedCalendarDay(day)}
-                            type="button"
-                          >
-                            {isActiveWeekday && day.completedPomodoros > 0 ? (
-                              <span>{day.completedPomodoros}</span>
-                            ) : null}
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              aria-label={`${day.date.toLocaleDateString()} focus activity`}
+                              className={[
+                                "report-month-activity-day",
+                                `intensity-${intensity}`,
+                                day.isToday ? "is-today" : ""
+                              ].join(" ")}
+                              disabled={!day.isCurrentMonth}
+                              key={day.key}
+                              onClick={() => setSelectedCalendarDay(day)}
+                              type="button"
+                            >
+                              {day.isCurrentMonth && day.completedPomodoros > 0 ? (
+                                <strong>{day.completedPomodoros}</strong>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="report-activity-calendar-block">
+                    <span className="report-activity-calendar-title">Procrastination</span>
+                    <div className="report-month-activity-calendar report-month-activity-calendar--procrastination">
+                      <div className="report-month-activity-weekdays">
+                        {weekdayLabels.map((weekday) => (
+                          <span key={weekday}>{weekday[0]}</span>
+                        ))}
+                      </div>
+                      <div className="report-month-activity-grid">
+                        {calendarWeeks.flat().map((day) => {
+                          const procrastinationMinutes = procrastinationMinutesByDay.get(day.key) ?? 0;
+                          const intensity = day.isCurrentMonth
+                            ? getProcrastinationIntensity(
+                                procrastinationMinutes,
+                                maxProcrastinationMinutes
+                              )
+                            : "outside";
+
+                          return (
+                            <button
+                              aria-label={`${day.date.toLocaleDateString()} procrastination activity`}
+                              className={[
+                                "report-month-activity-day",
+                                "report-month-activity-day--procrastination",
+                                `intensity-${intensity}`,
+                                day.isToday ? "is-today" : ""
+                              ].join(" ")}
+                              disabled={!day.isCurrentMonth}
+                              key={day.key}
+                              onClick={() => setSelectedCalendarDay(day)}
+                              type="button"
+                            >
+                              {day.isCurrentMonth && procrastinationMinutes > 0 ? (
+                                <strong>{procrastinationMinutes}m</strong>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1414,7 +1866,11 @@ export const ReportPage = ({
                   </article>
                 ))}
               </div>
-              <button className="report-analytics-button" type="button">
+              <button
+                className="report-analytics-button"
+                onClick={() => setViewMode("trends")}
+                type="button"
+              >
                 View full analytics
                 <ReportIcon name="external" />
               </button>
@@ -1519,10 +1975,10 @@ export const ReportPage = ({
         </div>
       ) : null}
 
-      {behindScheduleDetails ? (
+      {openOverdueDetails ? (
         <div
           className="modal-overlay"
-          onClick={() => setBehindScheduleDetails(null)}
+          onClick={() => setOpenOverdueDetails(null)}
           role="presentation"
         >
           <div
@@ -1530,28 +1986,28 @@ export const ReportPage = ({
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Behind schedule tasks"
+            aria-label="Open overdue tasks"
           >
             <div className="details-title">
               <div>
-                <h3>Behind Schedule</h3>
+                <h3>Open Overdue</h3>
                 <p>
-                  {formatMonthLabel(visibleMonth)} - {behindScheduleDetails.length} overdue task
-                  {behindScheduleDetails.length === 1 ? "" : "s"}
+                  {formatMonthLabel(visibleMonth)} - {openOverdueDetails.length} open overdue task
+                  {openOverdueDetails.length === 1 ? "" : "s"}
                 </p>
               </div>
               <button
                 className="ghost-button"
-                onClick={() => setBehindScheduleDetails(null)}
+                onClick={() => setOpenOverdueDetails(null)}
                 type="button"
               >
                 Close
               </button>
             </div>
 
-            {behindScheduleDetails.length > 0 ? (
+            {openOverdueDetails.length > 0 ? (
               <div className="report-day-modal-list">
-                {behindScheduleDetails.map((task) => (
+                {openOverdueDetails.map((task) => (
                   <button
                     className="report-day-modal-item"
                     key={`behind-${task.id}`}
@@ -1570,7 +2026,7 @@ export const ReportPage = ({
                 ))}
               </div>
             ) : (
-              <div className="empty-state">No overdue tasks in this month.</div>
+              <div className="empty-state">No open overdue tasks in this month.</div>
             )}
           </div>
         </div>

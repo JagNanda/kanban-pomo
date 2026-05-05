@@ -3,6 +3,7 @@ import type { BreakRecordRow } from "../models/break-record-row";
 import type { ColumnRow } from "../models/column-row";
 import type { FieldDefinitionRow } from "../models/field-definition-row";
 import type { PomodoroSessionRow } from "../models/pomodoro-session-row";
+import type { ProcrastinationRecordRow } from "../models/procrastination-record-row";
 import type { TaskCollectionRow } from "../models/task-collection-row";
 import type { TaskProjectRow } from "../models/task-project-row";
 import type { TaskFieldAssignmentRow } from "../models/task-field-assignment-row";
@@ -209,3 +210,5 @@ export const demoBreakRecordRows: BreakRecordRow[] = [
     ended_at: "2026-03-26T13:30:00.000Z"
   }
 ];
+
+export const demoProcrastinationRecordRows: ProcrastinationRecordRow[] = [];

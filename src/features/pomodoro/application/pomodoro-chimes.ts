@@ -5,6 +5,13 @@ interface ToneStep {
   duration: number;
   gain: number;
   type?: OscillatorType;
+  attack?: number;
+  release?: number;
+  pauseAfter?: number;
+  slideToFrequency?: number;
+  accentFrequency?: number;
+  accentGain?: number;
+  accentType?: OscillatorType;
 }
 
 type ChimeProfile = ToneStep[];
@@ -24,9 +31,10 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Bright Bells",
     mood: "loud",
     profile: [
-      { frequency: 880, duration: 0.13, gain: 0.11, type: "triangle" },
-      { frequency: 1174, duration: 0.16, gain: 0.11, type: "triangle" },
-      { frequency: 1568, duration: 0.26, gain: 0.12, type: "sine" }
+      { frequency: 1046, duration: 0.1, gain: 0.28, type: "triangle", accentFrequency: 2093, accentGain: 0.11 },
+      { frequency: 1397, duration: 0.12, gain: 0.3, type: "triangle", pauseAfter: 0.025, accentFrequency: 2794, accentGain: 0.1 },
+      { frequency: 1760, duration: 0.2, gain: 0.32, type: "sine", accentFrequency: 3520, accentGain: 0.08 },
+      { frequency: 2349, duration: 0.24, gain: 0.26, type: "sine" }
     ]
   },
   {
@@ -34,10 +42,10 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Victory Ping",
     mood: "loud",
     profile: [
-      { frequency: 784, duration: 0.14, gain: 0.12, type: "square" },
-      { frequency: 1046, duration: 0.16, gain: 0.11, type: "triangle" },
-      { frequency: 1318, duration: 0.24, gain: 0.12, type: "triangle" },
-      { frequency: 1760, duration: 0.3, gain: 0.1, type: "sine" }
+      { frequency: 523, duration: 0.12, gain: 0.3, type: "square", pauseAfter: 0.045 },
+      { frequency: 659, duration: 0.12, gain: 0.28, type: "square", pauseAfter: 0.04 },
+      { frequency: 784, duration: 0.16, gain: 0.32, type: "sawtooth", accentFrequency: 1175, accentGain: 0.1 },
+      { frequency: 1046, duration: 0.34, gain: 0.34, type: "triangle", accentFrequency: 2093, accentGain: 0.08 }
     ]
   },
   {
@@ -45,10 +53,10 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Triple Rise",
     mood: "loud",
     profile: [
-      { frequency: 988, duration: 0.12, gain: 0.1, type: "triangle" },
-      { frequency: 1318, duration: 0.12, gain: 0.11, type: "triangle" },
-      { frequency: 988, duration: 0.12, gain: 0.1, type: "triangle" },
-      { frequency: 1760, duration: 0.28, gain: 0.13, type: "sine" }
+      { frequency: 440, duration: 0.11, gain: 0.27, type: "triangle", pauseAfter: 0.075 },
+      { frequency: 660, duration: 0.11, gain: 0.3, type: "triangle", pauseAfter: 0.075 },
+      { frequency: 880, duration: 0.13, gain: 0.33, type: "triangle", pauseAfter: 0.075 },
+      { frequency: 1320, duration: 0.32, gain: 0.31, type: "sine" }
     ]
   },
   {
@@ -56,9 +64,9 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Soft Bloom",
     mood: "relaxed",
     profile: [
-      { frequency: 523, duration: 0.18, gain: 0.07, type: "sine" },
-      { frequency: 659, duration: 0.22, gain: 0.07, type: "sine" },
-      { frequency: 784, duration: 0.32, gain: 0.075, type: "triangle" }
+      { frequency: 330, duration: 0.3, gain: 0.18, type: "sine", attack: 0.045, release: 0.16, accentFrequency: 495, accentGain: 0.06 },
+      { frequency: 392, duration: 0.34, gain: 0.2, type: "sine", attack: 0.045, release: 0.18, accentFrequency: 587, accentGain: 0.07 },
+      { frequency: 494, duration: 0.46, gain: 0.21, type: "triangle", attack: 0.055, release: 0.22, accentFrequency: 740, accentGain: 0.06 }
     ]
   },
   {
@@ -66,9 +74,10 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Gentle Glass",
     mood: "relaxed",
     profile: [
-      { frequency: 392, duration: 0.22, gain: 0.07, type: "triangle" },
-      { frequency: 523, duration: 0.28, gain: 0.065, type: "sine" },
-      { frequency: 659, duration: 0.34, gain: 0.07, type: "sine" }
+      { frequency: 740, duration: 0.18, gain: 0.19, type: "sine", pauseAfter: 0.055, accentFrequency: 1480, accentGain: 0.07 },
+      { frequency: 988, duration: 0.2, gain: 0.2, type: "sine", pauseAfter: 0.065, accentFrequency: 1976, accentGain: 0.075 },
+      { frequency: 1245, duration: 0.22, gain: 0.2, type: "triangle", pauseAfter: 0.08 },
+      { frequency: 1661, duration: 0.38, gain: 0.17, type: "sine", release: 0.2 }
     ]
   },
   {
@@ -76,10 +85,10 @@ const chimeDefinitions: ChimeDefinition[] = [
     label: "Quiet Morning",
     mood: "relaxed",
     profile: [
-      { frequency: 440, duration: 0.18, gain: 0.06, type: "sine" },
-      { frequency: 554, duration: 0.18, gain: 0.06, type: "triangle" },
-      { frequency: 659, duration: 0.28, gain: 0.065, type: "sine" },
-      { frequency: 880, duration: 0.34, gain: 0.055, type: "sine" }
+      { frequency: 392, duration: 0.24, gain: 0.17, type: "sine", attack: 0.035, release: 0.15 },
+      { frequency: 330, duration: 0.24, gain: 0.18, type: "triangle", attack: 0.035, release: 0.15, pauseAfter: 0.05 },
+      { frequency: 494, duration: 0.32, gain: 0.19, type: "sine", attack: 0.04, release: 0.18 },
+      { frequency: 659, duration: 0.42, gain: 0.16, type: "sine", attack: 0.05, release: 0.24 }
     ]
   }
 ];
@@ -151,24 +160,63 @@ const scheduleTone = (
 ): number => {
   const oscillator = context.createOscillator();
   const gainNode = context.createGain();
+  const compressor = context.createDynamicsCompressor();
+  let accentOscillator: OscillatorNode | null = null;
+  let accentGainNode: GainNode | null = null;
+  const attack = step.attack ?? 0.012;
+  const release = step.release ?? 0.09;
+  const endAt = startAt + Math.max(step.duration, attack + release + 0.025);
+  const sustainUntil = Math.max(startAt + attack + 0.001, endAt - release);
 
   oscillator.type = step.type ?? "sine";
   oscillator.frequency.setValueAtTime(step.frequency, startAt);
+  if (step.slideToFrequency) {
+    oscillator.frequency.exponentialRampToValueAtTime(step.slideToFrequency, sustainUntil);
+  }
+
+  compressor.threshold.setValueAtTime(-12, startAt);
+  compressor.knee.setValueAtTime(12, startAt);
+  compressor.ratio.setValueAtTime(7, startAt);
+  compressor.attack.setValueAtTime(0.004, startAt);
+  compressor.release.setValueAtTime(0.16, startAt);
 
   gainNode.gain.setValueAtTime(0.0001, startAt);
-  gainNode.gain.exponentialRampToValueAtTime(step.gain, startAt + 0.02);
-  gainNode.gain.exponentialRampToValueAtTime(
-    0.0001,
-    startAt + Math.max(step.duration, 0.05)
-  );
+  gainNode.gain.exponentialRampToValueAtTime(step.gain, startAt + attack);
+  gainNode.gain.setValueAtTime(step.gain, sustainUntil);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
 
   oscillator.connect(gainNode);
-  gainNode.connect(context.destination);
+  gainNode.connect(compressor);
+  compressor.connect(context.destination);
+
+  if (step.accentFrequency && step.accentGain) {
+    accentOscillator = context.createOscillator();
+    accentGainNode = context.createGain();
+
+    accentOscillator.type = step.accentType ?? "sine";
+    accentOscillator.frequency.setValueAtTime(step.accentFrequency, startAt);
+    accentGainNode.gain.setValueAtTime(0.0001, startAt);
+    accentGainNode.gain.exponentialRampToValueAtTime(step.accentGain, startAt + attack);
+    accentGainNode.gain.setValueAtTime(step.accentGain, sustainUntil);
+    accentGainNode.gain.exponentialRampToValueAtTime(0.0001, endAt);
+    accentOscillator.connect(accentGainNode);
+    accentGainNode.connect(compressor);
+    accentOscillator.start(startAt);
+    accentOscillator.stop(endAt + 0.04);
+  }
 
   oscillator.start(startAt);
-  oscillator.stop(startAt + step.duration + 0.04);
+  oscillator.stop(endAt + 0.04);
 
-  return startAt + step.duration;
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gainNode.disconnect();
+    accentOscillator?.disconnect();
+    accentGainNode?.disconnect();
+    compressor.disconnect();
+  };
+
+  return endAt + (step.pauseAfter ?? 0);
 };
 
 export const playPomodoroCompletionChime = async (
@@ -195,7 +243,7 @@ export const playPomodoroCompletionChime = async (
       cursor = scheduleTone(context, cursor, step);
 
       if (index < profile.length - 1) {
-        cursor += 0.035;
+        cursor += 0.02;
       }
     });
 

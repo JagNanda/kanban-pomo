@@ -9,6 +9,34 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: rgba(113, 134, 205, 0.58) rgba(9, 15, 28, 0.42);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 0.58rem;
+  height: 0.58rem;
+}
+
+*::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(9, 15, 28, 0.42);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(9, 15, 28, 0.78);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(129, 144, 255, 0.78), rgba(83, 115, 185, 0.72));
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(152, 162, 255, 0.9), rgba(99, 134, 211, 0.86));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html,
@@ -1957,8 +1985,8 @@ textarea {
 .tasks-table-head,
 .tasks-table-row {
   display: grid;
-  grid-template-columns: minmax(12rem, 2.6fr) minmax(6.2rem, 0.95fr) minmax(5.8rem, 0.8fr) minmax(7rem, 0.95fr) minmax(7rem, 0.95fr) minmax(7rem, 0.95fr) 2.9rem;
-  gap: 0.55rem;
+  grid-template-columns: minmax(10.8rem, 2.25fr) minmax(8.4rem, 1.02fr) minmax(5rem, 0.76fr) minmax(5.2rem, 0.78fr) minmax(5.2rem, 0.78fr) minmax(6rem, 0.86fr) minmax(7.2rem, 0.72fr);
+  gap: 0.42rem;
   align-items: center;
 }
 
@@ -2051,20 +2079,32 @@ textarea {
 .tasks-status-select {
   width: 100%;
   min-width: 0;
-  padding: 0.34rem 1.9rem 0.34rem 0.6rem;
+  min-height: 2.2rem;
+  padding: 0.44rem 2rem 0.46rem 0.7rem;
   border-radius: 999px;
   border: 1px solid rgba(89, 101, 124, 0.42);
   background: rgba(22, 27, 38, 0.94);
   color: #eef2fb;
   font-size: 0.76rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.35;
+  color-scheme: dark;
 }
 
 .tasks-status-select:hover,
 .tasks-status-select:focus {
   border-color: rgba(130, 144, 175, 0.58);
   outline: none;
+}
+
+.tasks-status-select option {
+  background-color: #0b1220;
+  color: #dce6ff;
+}
+
+.tasks-status-select option:checked {
+  background-color: #293264;
+  color: #ffffff;
 }
 
 .tasks-table-cell .task-priority-wrap {
@@ -2088,6 +2128,8 @@ textarea {
 
 .tasks-table-cell--actions {
   display: flex;
+  align-items: center;
+  gap: 0.42rem;
   justify-content: flex-end;
 }
 
@@ -2585,7 +2627,7 @@ button.report-task-summary-stat:hover {
 
 .report-graph-legend {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.48rem;
 }
 
@@ -2856,15 +2898,6 @@ button.report-task-summary-stat:hover {
   scrollbar-width: thin;
 }
 
-.focus-sidebar::-webkit-scrollbar {
-  width: 0.55rem;
-}
-
-.focus-sidebar::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(88, 99, 128, 0.55);
-}
-
 .focus-panel-card {
   background: rgba(24, 30, 38, 0.78);
   padding: 0.7rem;
@@ -2937,13 +2970,11 @@ button.report-task-summary-stat:hover {
   margin-top: auto;
 }
 
-.focus-panel-card--deadlines .history-meta span,
-.focus-panel-card--completed .history-meta span {
+.focus-panel-card--deadlines .history-meta span {
   text-transform: capitalize;
 }
 
 .focus-panel-card--deadlines .empty-state,
-.focus-panel-card--completed .empty-state,
 .focus-panel-card--history .empty-state {
   min-height: 5.5rem;
 }
@@ -4355,6 +4386,11 @@ button.report-task-summary-stat:hover {
     translateY(calc(var(--ring-radius) * -1));
 }
 
+.timer-ring.is-empty .timer-ring-progress,
+.timer-ring.is-empty .timer-ring-progress-dot {
+  opacity: 0;
+}
+
 .app-shell--focus .timer-ring-halo--outer {
   width: calc(var(--ring-size) * 0.84);
   height: calc(var(--ring-size) * 0.84);
@@ -4590,10 +4626,14 @@ button.report-task-summary-stat:hover {
 }
 
 .focus-task-title {
+  display: -webkit-box;
+  overflow: hidden;
   margin: -0.12rem 0 0;
   color: #f8fbff;
   font-size: 0.86rem;
   line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .focus-icon-button,
@@ -5377,6 +5417,178 @@ button.report-task-summary-stat:hover {
   color: #aebad5;
   font-size: 0.66rem;
   font-weight: 700;
+}
+
+.report-trends-tab {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.report-trends-tab-grid {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.58fr) minmax(20rem, 0.82fr);
+  gap: 0.75rem;
+}
+
+.report-procrastination-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+}
+
+.report-procrastination-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.report-procrastination-summary span,
+.report-trend-detail-card {
+  border-radius: 8px;
+  border: 1px solid rgba(78, 96, 136, 0.34);
+  background: rgba(9, 16, 30, 0.62);
+}
+
+.report-procrastination-summary span {
+  display: grid;
+  gap: 0.12rem;
+  min-height: 3.2rem;
+  align-content: center;
+  padding: 0.52rem 0.62rem;
+  color: #aeb9d1;
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.report-procrastination-summary strong {
+  color: #fff7e8;
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.report-procrastination-list {
+  display: grid;
+  gap: 0.52rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.18rem;
+}
+
+.report-procrastination-entry {
+  display: grid;
+  grid-template-columns: minmax(4.8rem, 0.42fr) minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.62rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 157, 47, 0.26);
+  background:
+    radial-gradient(circle at top left, rgba(255, 157, 47, 0.12), transparent 42%),
+    rgba(12, 20, 35, 0.78);
+}
+
+.report-procrastination-entry-time,
+.report-procrastination-entry-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.report-procrastination-entry-time strong {
+  color: #ffc05f;
+  font-size: 0.94rem;
+  line-height: 1.1;
+}
+
+.report-procrastination-entry-time span,
+.report-procrastination-entry-copy span {
+  color: #aeb9d1;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.report-procrastination-entry-copy p {
+  margin: 0;
+  color: #f0f4ff;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.report-procrastination-empty {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 8rem;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px dashed rgba(93, 112, 154, 0.34);
+  color: #9faac3;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.report-trend-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.report-trend-detail-card {
+  --trend-card-accent: #6fa8ff;
+  display: grid;
+  gap: 0.18rem;
+  min-height: 5.6rem;
+  align-content: center;
+  padding: 0.78rem 0.9rem;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--trend-card-accent) 16%, transparent), transparent 44%),
+    rgba(12, 20, 35, 0.78);
+}
+
+.report-trend-detail-card--blue {
+  --trend-card-accent: #6fa8ff;
+}
+
+.report-trend-detail-card--orange {
+  --trend-card-accent: #ff9d2f;
+}
+
+.report-trend-detail-card--red {
+  --trend-card-accent: #ff6868;
+}
+
+.report-trend-detail-card--violet {
+  --trend-card-accent: #a875ff;
+}
+
+.report-trend-detail-card span {
+  color: #aeb9d1;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.report-trend-detail-card strong {
+  color: #f8fbff;
+  font-size: 1.18rem;
+  line-height: 1.08;
+}
+
+.report-trend-detail-card p {
+  margin: 0;
+  color: var(--trend-card-accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.3;
 }
 
 .report-snapshot-grid {
@@ -6381,5 +6593,1928 @@ button.report-snapshot-card {
 
   .report-calendar-weekdays {
     display: none;
+  }
+}
+
+/* Stable app navigation */
+:root {
+  --app-sidebar-width: 7.2rem;
+  --app-sidebar-button-width: 5.45rem;
+  --app-sidebar-button-height: 4.4rem;
+}
+
+.app-shell,
+.app-shell--board,
+.app-shell--focus,
+.app-shell--report {
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+  gap: 1.25rem;
+  padding: 0 1.25rem 0 0;
+}
+
+.app-sidebar,
+.app-shell--board .app-sidebar,
+.app-shell--focus .app-sidebar,
+.app-shell--report .app-sidebar {
+  display: flex;
+  width: var(--app-sidebar-width);
+  min-width: var(--app-sidebar-width);
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1rem 0.75rem;
+  border-right: 1px solid rgba(44, 67, 111, 0.42);
+  border-bottom: 0;
+}
+
+.app-main,
+.app-shell--board .app-main,
+.app-shell--focus .app-main,
+.app-shell--report .app-main {
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem 0 0.85rem;
+}
+
+.sidebar-nav,
+.app-shell--board .sidebar-nav {
+  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.72rem;
+}
+
+.sidebar-brand-button,
+.sidebar-nav-button,
+.sidebar-theme-button,
+.app-shell--board .sidebar-brand-button,
+.app-shell--board .sidebar-nav-button,
+.app-shell--board .sidebar-theme-button,
+.app-shell--report .sidebar-brand-button,
+.app-shell--report .sidebar-nav-button,
+.app-shell--report .sidebar-theme-button {
+  width: var(--app-sidebar-button-width);
+  height: var(--app-sidebar-button-height);
+  flex: 0 0 var(--app-sidebar-button-height);
+  flex-direction: column;
+  gap: 0.28rem;
+  border-radius: 14px;
+}
+
+.sidebar-theme-button {
+  border-radius: 14px;
+}
+
+.sidebar-brand-button svg,
+.sidebar-nav-button svg,
+.sidebar-theme-button svg,
+.app-shell--board .sidebar-brand-button svg,
+.app-shell--board .sidebar-nav-button svg,
+.app-shell--board .sidebar-theme-button svg,
+.app-shell--report .sidebar-brand-button svg,
+.app-shell--report .sidebar-nav-button svg,
+.app-shell--report .sidebar-theme-button svg {
+  width: 1.38rem;
+  height: 1.38rem;
+}
+
+.sidebar-button-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: currentColor;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-shell--focus,
+.page-shell--report {
+  min-height: 0;
+}
+
+@media (max-width: 860px) {
+  .app-shell,
+  .app-shell--board,
+  .app-shell--focus,
+  .app-shell--report {
+    grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    padding: 0 1rem 0 0;
+  }
+}
+
+/* Focus page fit */
+.app-shell--focus .focus-shell {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell--focus .focus-primary,
+.app-shell--focus .focus-sidebar {
+  min-height: 0;
+}
+
+.app-shell--focus .focus-primary {
+  gap: 0.56rem;
+}
+
+.app-shell--focus .focus-select-panel {
+  padding: 0.62rem 1rem;
+}
+
+.app-shell--focus .focus-select-wrap {
+  gap: 0.28rem;
+}
+
+.app-shell--focus .focus-select-wrap select {
+  height: 2.42rem;
+  padding-block: 0.42rem;
+}
+
+.app-shell--focus .focus-timer-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.52rem;
+  padding: 0.56rem 1.2rem;
+}
+
+.app-shell--focus .focus-ring-wrap {
+  --ring-size: min(17.2rem, 42vh);
+}
+
+.app-shell--focus .timer-readout--giant {
+  font-size: clamp(3rem, 5vw, 4.25rem);
+}
+
+.app-shell--focus .focus-action-button {
+  min-height: 2.25rem;
+  padding: 0.48rem 0.82rem;
+}
+
+.app-shell--focus .focus-session-grid,
+.app-shell--focus .focus-plan-grid {
+  gap: 0.48rem;
+}
+
+.app-shell--focus .focus-session-card {
+  min-height: 3rem;
+  padding: 0.42rem 0.62rem;
+}
+
+.app-shell--focus .focus-session-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+.app-shell--focus .focus-plan-panel {
+  padding: 0.58rem 0.82rem;
+}
+
+.app-shell--focus .focus-plan-grid {
+  margin-top: 0.42rem;
+}
+
+.app-shell--focus .focus-plan-card {
+  min-height: 3.35rem;
+  padding: 0.46rem 0.62rem;
+}
+
+.app-shell--focus .focus-plan-icon {
+  width: 2.08rem;
+  height: 2.08rem;
+}
+
+.app-shell--focus .focus-sidebar {
+  gap: 0.42rem;
+  overflow: hidden;
+}
+
+.app-shell--focus .focus-panel-card {
+  gap: 0.28rem;
+  padding: 0.5rem 0.66rem;
+}
+
+.app-shell--focus .focus-panel-card--settings {
+  margin-top: 0;
+}
+
+.app-shell--focus .focus-card-header {
+  min-height: 1.28rem;
+}
+
+.app-shell--focus .focus-section-label {
+  font-size: 0.66rem;
+}
+
+.app-shell--focus .focus-task-title {
+  font-size: 0.8rem;
+}
+
+.app-shell--focus .focus-meta-row,
+.app-shell--focus .focus-due-item {
+  min-height: 1.82rem;
+  padding-block: 0.22rem;
+}
+
+.app-shell--focus .focus-due-copy strong,
+.app-shell--focus .focus-activity-item strong,
+.app-shell--focus .focus-task-title,
+.app-shell--focus .history-item strong {
+  line-height: 1.18;
+}
+
+.app-shell--focus .focus-panel-card--deadlines .empty-state,
+.app-shell--focus .focus-panel-card--history .empty-state {
+  min-height: 3.2rem;
+  padding: 0.62rem;
+  font-size: 0.88rem;
+}
+
+.app-shell--focus .history-stack {
+  gap: 0.3rem;
+}
+
+.app-shell--focus .history-item {
+  min-height: 2.5rem;
+  padding: 0.46rem 0.62rem;
+}
+
+.app-shell--focus .focus-empty-compact {
+  min-height: 2.7rem;
+}
+
+.app-shell--focus .focus-settings-grid,
+.app-shell--focus .focus-chime-settings {
+  gap: 0.24rem;
+}
+
+.app-shell--focus .focus-settings-grid .label-stack,
+.app-shell--focus .focus-chime-settings .label-stack {
+  min-height: 1.62rem;
+}
+
+.app-shell--focus .focus-settings-grid input,
+.app-shell--focus .focus-setting-inline select,
+.app-shell--focus .focus-setting-inline .ghost-button {
+  height: 1.62rem;
+  min-height: 1.62rem;
+  padding-block: 0.2rem;
+}
+
+/* Focus right-column stretch */
+@media (min-height: 660px) {
+  .app-shell--focus .focus-sidebar {
+    height: 100%;
+    gap: 0.64rem;
+    overflow: hidden;
+  }
+
+  .app-shell--focus .focus-panel-card {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    padding-block: 0.7rem;
+  }
+
+  .app-shell--focus .focus-panel-card--task {
+    flex: 0 0 clamp(5.35rem, 8vh, 6.35rem);
+  }
+
+  .app-shell--focus .focus-panel-card--task:has(.focus-task-meta) {
+    flex-basis: clamp(10.6rem, 17vh, 12rem);
+  }
+
+  .app-shell--focus .focus-panel-card--deadlines {
+    flex: 1.3 1 0;
+  }
+
+  .app-shell--focus .focus-panel-card--history {
+    flex: 1.15 1 0;
+  }
+
+  .app-shell--focus .focus-panel-card--settings {
+    flex: 0 0 auto;
+    padding-bottom: 0.8rem;
+  }
+
+  .app-shell--focus .focus-panel-card .history-stack {
+    flex: 1 1 auto;
+  }
+
+  .app-shell--focus .focus-panel-card--deadlines .empty-state,
+  .app-shell--focus .focus-panel-card--history .empty-state,
+  .app-shell--focus .focus-empty-compact {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+/* Report page flow */
+.app-shell--report .page-shell--report {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.app-shell--report .report-shell {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.app-shell--report .report-controls-row,
+.app-shell--report .report-summary-grid,
+.app-shell--report .report-main-grid,
+.app-shell--report .report-lower-grid,
+.app-shell--report .report-calendar-panel,
+.app-shell--report .report-trends-panel {
+  flex: 0 0 auto;
+}
+
+.app-shell--report .report-main-grid,
+.app-shell--report .report-lower-grid {
+  align-items: stretch;
+}
+
+.app-shell--report .report-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell--report .report-graph-canvas,
+.app-shell--report .report-trend-chart,
+.app-shell--report .report-health-card,
+.app-shell--report .report-activity-panel,
+.app-shell--report .report-insights-panel {
+  min-height: 0;
+}
+
+/* Report visual tuning */
+.app-shell--report .report-summary-card,
+.app-shell--report .report-panel,
+.app-shell--report .report-snapshot-card,
+.app-shell--report .report-health-card,
+.app-shell--report .report-insight-card {
+  background:
+    linear-gradient(180deg, rgba(15, 24, 40, 0.92), rgba(9, 16, 29, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.app-shell--report .report-summary-card {
+  border-color: color-mix(in srgb, var(--report-card-accent) 18%, var(--report-border));
+}
+
+.app-shell--report .report-summary-icon,
+.app-shell--report .report-insight-icon,
+.app-shell--report .report-health-donut,
+.app-shell--report .report-graph-dot {
+  box-shadow: none;
+}
+
+.app-shell--report .report-summary-icon {
+  background:
+    color-mix(in srgb, var(--report-card-accent) 11%, rgba(8, 14, 26, 0.88));
+}
+
+.app-shell--report .report-trend-line {
+  filter: none;
+}
+
+.app-shell--report .report-trend-tooltip {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.app-shell--report .report-snapshot-card--blue,
+.app-shell--report .report-snapshot-card--green,
+.app-shell--report .report-snapshot-card--amber,
+.app-shell--report .report-snapshot-card--red {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--snapshot-accent) 8%, rgba(14, 23, 39, 0.9)),
+      rgba(9, 16, 29, 0.94)
+    );
+}
+
+.report-month-activity-calendar {
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
+  gap: 0.34rem;
+}
+
+.report-month-activity-weekdays,
+.report-month-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1.72rem);
+  gap: 0.28rem;
+}
+
+.report-month-activity-weekdays span {
+  color: #aab6d0;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.report-month-activity-day {
+  display: grid;
+  width: 1.72rem;
+  height: 1.72rem;
+  min-width: 0;
+  place-items: center;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(71, 86, 119, 0.22);
+  background: rgba(38, 47, 65, 0.48);
+  color: #dce5f8;
+}
+
+.report-month-activity-day:disabled {
+  cursor: default;
+}
+
+.report-month-activity-day.intensity-outside {
+  opacity: 0.22;
+  background: rgba(38, 47, 65, 0.26);
+}
+
+.report-month-activity-day.intensity-0 {
+  background: rgba(38, 47, 65, 0.5);
+}
+
+.report-month-activity-day.intensity-1 {
+  background: rgba(48, 99, 74, 0.58);
+  border-color: rgba(74, 160, 107, 0.34);
+}
+
+.report-month-activity-day.intensity-2 {
+  background: rgba(60, 83, 157, 0.68);
+  border-color: rgba(94, 132, 232, 0.38);
+}
+
+.report-month-activity-day.intensity-3 {
+  background: rgba(88, 73, 180, 0.78);
+  border-color: rgba(126, 104, 255, 0.44);
+}
+
+.report-month-activity-day.is-today {
+  outline: 2px solid rgba(125, 147, 255, 0.72);
+  outline-offset: 2px;
+}
+
+.report-month-activity-number {
+  color: #c5d0e6;
+  font-size: 0.5rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.report-month-activity-day strong {
+  color: #ffffff;
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.report-month-activity-day strong + .report-month-activity-number,
+.report-month-activity-day:has(strong) .report-month-activity-number {
+  display: none;
+}
+
+/* Report compact lower row */
+.app-shell--report .report-summary-card--blue {
+  --report-card-accent: #6fa8ff;
+}
+
+.app-shell--report .report-summary-card--violet {
+  --report-card-accent: #a875ff;
+}
+
+.app-shell--report .report-summary-card--green {
+  --report-card-accent: #7ed957;
+}
+
+.app-shell--report .report-summary-card--amber {
+  --report-card-accent: #f6d64f;
+}
+
+.app-shell--report .report-summary-card--cyan {
+  --report-card-accent: #54d2d4;
+}
+
+.app-shell--report .report-summary-card--red {
+  --report-card-accent: #ff6868;
+}
+
+.app-shell--report .report-lower-grid {
+  grid-template-columns: minmax(24rem, 0.86fr) minmax(30rem, 1.14fr);
+}
+
+.app-shell--report .report-activity-panel,
+.app-shell--report .report-insights-panel {
+  padding-block: 0.56rem;
+}
+
+.app-shell--report .report-activity-body {
+  grid-template-columns: 7.4rem auto;
+  gap: 0.9rem;
+  align-items: start;
+  margin-top: 0.38rem;
+}
+
+.app-shell--report .report-activity-legend {
+  gap: 0.42rem;
+  padding-left: 0.35rem;
+}
+
+.app-shell--report .report-activity-legend-item {
+  gap: 0.42rem;
+  font-size: 0.64rem;
+}
+
+.app-shell--report .report-activity-legend-item i {
+  width: 0.58rem;
+  height: 0.58rem;
+}
+
+.app-shell--report .report-month-activity-calendar {
+  gap: 0.28rem;
+}
+
+.app-shell--report .report-month-activity-weekdays,
+.app-shell--report .report-month-activity-grid {
+  grid-template-columns: repeat(7, 1rem);
+  gap: 0.28rem;
+}
+
+.app-shell--report .report-month-activity-day {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 4px;
+}
+
+.app-shell--report .report-month-activity-number {
+  font-size: 0.42rem;
+}
+
+.app-shell--report .report-month-activity-day strong {
+  font-size: 0.52rem;
+}
+
+.app-shell--report .report-insights-panel {
+  gap: 0.52rem;
+}
+
+.app-shell--report .report-insight-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.app-shell--report .report-insight-card {
+  min-height: 3.3rem;
+  gap: 0.42rem;
+  padding: 0.56rem 0.62rem;
+}
+
+.app-shell--report .report-insight-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.app-shell--report .report-analytics-button {
+  min-height: 1.72rem;
+  margin-top: 0;
+}
+
+/* Report no-scroll compacting */
+.app-shell--report .report-shell {
+  gap: 0.42rem;
+}
+
+.app-shell--report .report-summary-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.48rem;
+}
+
+.app-shell--report .report-summary-card {
+  min-height: 5rem;
+  gap: 0.46rem;
+  padding: 0.58rem 0.68rem;
+}
+
+.app-shell--report .report-summary-icon {
+  width: 2.18rem;
+  height: 2.18rem;
+}
+
+.app-shell--report .report-summary-icon svg {
+  width: 1.12rem;
+  height: 1.12rem;
+}
+
+.app-shell--report .report-summary-value {
+  font-size: 1.18rem;
+}
+
+.app-shell--report .report-summary-detail,
+.app-shell--report .report-summary-delta {
+  font-size: 0.58rem;
+}
+
+.app-shell--report .report-summary-delta,
+.app-shell--report .report-summary-delta--down {
+  color: var(--report-card-accent);
+}
+
+.app-shell--report .report-trends-panel,
+.app-shell--report .report-performance-panel {
+  padding-block: 0.52rem;
+}
+
+.app-shell--report .report-graph-canvas {
+  margin-top: 0.24rem;
+}
+
+.app-shell--report .report-trend-chart {
+  height: 13.8rem;
+  min-height: 0;
+}
+
+.app-shell--report .report-snapshot-grid {
+  row-gap: 0.92rem;
+  column-gap: 0.5rem;
+  margin-top: 0.56rem;
+}
+
+.app-shell--report .report-snapshot-card {
+  min-height: 3rem;
+  padding-block: 0.4rem;
+}
+
+.app-shell--report .report-health-card {
+  margin-top: 1rem;
+  padding: 0.44rem 0.54rem;
+}
+
+.app-shell--report .report-health-content {
+  margin-top: 0.24rem;
+}
+
+.app-shell--report .report-main-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.95fr);
+  flex: 1 1 auto;
+  min-height: 19.1rem;
+}
+
+.app-shell--report .report-trends-panel,
+.app-shell--report .report-performance-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.app-shell--report .report-graph-canvas {
+  flex: 1 1 auto;
+}
+
+.app-shell--report .report-trend-chart {
+  height: 100%;
+}
+
+@media (max-height: 680px) {
+  .app-shell--report .report-main-grid {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .app-shell--report .report-trend-chart {
+    height: 13.8rem;
+  }
+}
+
+/* Report proportional layout */
+.app-shell--report .page-shell--report,
+.app-shell--report .report-shell {
+  overflow: hidden;
+}
+
+.app-shell--report .report-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.app-shell--report .report-main-grid {
+  flex: 1 1 0;
+  min-height: 22rem;
+}
+
+.app-shell--report .report-lower-grid {
+  flex: 0 0 clamp(10.75rem, 18vh, 12rem);
+  min-height: 0;
+}
+
+@media (max-height: 800px) {
+  .app-shell--report .report-main-grid {
+    min-height: 0;
+  }
+
+  .app-shell--report .report-lower-grid {
+    flex-basis: clamp(10.25rem, 23vh, 11.4rem);
+  }
+
+  .app-shell--report .report-snapshot-grid {
+    row-gap: 0.8rem;
+    margin-top: 0.5rem;
+  }
+
+  .app-shell--report .report-health-card {
+    margin-top: 0.85rem;
+  }
+}
+
+@media (max-height: 680px) {
+  .app-shell--report .report-main-grid {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .app-shell--report .report-trend-chart {
+    height: 100%;
+  }
+
+  .app-shell--report .report-lower-grid {
+    flex-basis: 10.25rem;
+  }
+}
+
+/* Tasks visual refresh */
+.app-shell--tasks {
+  --tasks-panel: rgba(10, 17, 31, 0.88);
+  --tasks-panel-strong: rgba(12, 20, 36, 0.94);
+  --tasks-border: rgba(75, 95, 136, 0.34);
+  --tasks-border-strong: rgba(113, 132, 184, 0.42);
+  --tasks-muted: #a9b5cf;
+  --tasks-accent: #7b8cff;
+  --tasks-accent-blue: #71a9ff;
+  --tasks-accent-cyan: #66d3d0;
+}
+
+.app-shell--tasks .tasks-layout {
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+.app-shell--tasks .tasks-sidebar-card,
+.app-shell--tasks .tasks-main {
+  border-color: var(--tasks-border);
+  background:
+    linear-gradient(180deg, rgba(14, 23, 41, 0.92), rgba(7, 13, 25, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+.app-shell--tasks .tasks-sidebar-card {
+  gap: 0.86rem;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.app-shell--tasks .tasks-sidebar-section {
+  gap: 0.3rem;
+}
+
+.app-shell--tasks .tasks-sidebar-section-header {
+  color: #b5bfd7;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.app-shell--tasks .tasks-sidebar-divider {
+  background: rgba(104, 122, 165, 0.22);
+}
+
+.app-shell--tasks .tasks-sidebar-row {
+  min-height: 2.52rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #d8e2f6;
+}
+
+.app-shell--tasks .tasks-sidebar-row:hover {
+  background: rgba(24, 34, 58, 0.72);
+  border-color: rgba(93, 113, 159, 0.28);
+  color: #f4f8ff;
+}
+
+.app-shell--tasks .tasks-sidebar-row.is-active {
+  border-color: rgba(132, 144, 255, 0.48);
+  background:
+    linear-gradient(135deg, rgba(73, 81, 159, 0.86), rgba(47, 62, 119, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 24px rgba(92, 94, 255, 0.18);
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label,
+.app-shell--tasks .tasks-sidebar-row-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.58rem;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label svg {
+  width: 1.08rem;
+  height: 1.08rem;
+  flex: 0 0 auto;
+  color: #a9b8e8;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.app-shell--tasks .tasks-sidebar-row.is-active .tasks-sidebar-filter-label svg {
+  color: #ffffff;
+}
+
+.app-shell--tasks .tasks-sidebar-row strong,
+.app-shell--tasks .tasks-tree-row-count {
+  display: inline-flex;
+  min-width: 1.52rem;
+  min-height: 1.52rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(42, 51, 78, 0.84);
+  color: #dce6ff;
+  font-size: 0.78rem;
+}
+
+.app-shell--tasks .tasks-sidebar-row.is-active strong,
+.app-shell--tasks .tasks-sidebar-row.is-active + .tasks-tree-row-end .tasks-tree-row-count {
+  background: rgba(124, 126, 255, 0.28);
+  color: #ffffff;
+}
+
+.app-shell--tasks .tasks-project-toggle,
+.app-shell--tasks .tasks-project-add,
+.app-shell--tasks .tasks-sidebar-add {
+  border-color: rgba(99, 115, 154, 0.42);
+  background: rgba(25, 34, 57, 0.84);
+  color: #c4cff0;
+}
+
+.app-shell--tasks .tasks-project-toggle:hover,
+.app-shell--tasks .tasks-project-add:hover,
+.app-shell--tasks .tasks-sidebar-add:hover {
+  border-color: rgba(135, 151, 203, 0.5);
+  background: rgba(45, 57, 95, 0.9);
+  color: #ffffff;
+}
+
+.app-shell--tasks .tasks-project-children::before,
+.app-shell--tasks .tasks-project-child-row::before,
+.app-shell--tasks .tasks-project-create-collection::before {
+  background: rgba(103, 123, 170, 0.34);
+}
+
+.app-shell--tasks .tasks-sidebar-row--action {
+  border-color: rgba(119, 137, 190, 0.32);
+  background: rgba(14, 23, 42, 0.54);
+  color: #c9d5f3;
+}
+
+.app-shell--tasks .collection-badge {
+  border-color: color-mix(in srgb, var(--collection-badge-color) 44%, rgba(122, 139, 190, 0.24));
+  background: color-mix(in srgb, var(--collection-badge-color) 18%, rgba(18, 27, 49, 0.9));
+  color: color-mix(in srgb, var(--collection-badge-color) 68%, #ffffff);
+}
+
+.app-shell--tasks .tasks-main {
+  padding: 1.05rem 1.1rem;
+}
+
+.app-shell--tasks .board-title h2 {
+  color: #f8fbff;
+}
+
+.app-shell--tasks .board-title p {
+  color: var(--tasks-muted);
+}
+
+.app-shell--tasks .tasks-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.78rem;
+}
+
+.app-shell--tasks .tasks-title-row h2 {
+  min-width: 0;
+}
+
+.app-shell--tasks .tasks-title-row .collection-badge {
+  max-width: 14rem;
+  flex: 0 1 auto;
+  transform: translateY(0.04rem);
+}
+
+.app-shell--tasks .tasks-main-header-actions {
+  gap: 0.72rem;
+}
+
+.app-shell--tasks .tasks-search-field {
+  position: relative;
+  width: min(17rem, 100%);
+}
+
+.app-shell--tasks .tasks-search-icon {
+  position: absolute;
+  left: 0.82rem;
+  top: 50%;
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  color: #8fa0c8;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.app-shell--tasks .tasks-search-icon svg,
+.app-shell--tasks .tasks-create-button svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.app-shell--tasks .tasks-search-field input {
+  min-height: 2.48rem;
+  padding-left: 2.35rem;
+  border-color: rgba(87, 105, 151, 0.42);
+  background: rgba(7, 13, 25, 0.78);
+  color: #eef4ff;
+}
+
+.app-shell--tasks .tasks-search-field input:focus {
+  border-color: rgba(128, 145, 255, 0.58);
+  box-shadow: 0 0 0 3px rgba(102, 123, 255, 0.13);
+}
+
+.app-shell--tasks .tasks-create-button {
+  display: inline-flex;
+  min-height: 2.55rem;
+  align-items: center;
+  gap: 0.58rem;
+  border-color: rgba(136, 130, 255, 0.46);
+  background:
+    linear-gradient(135deg, rgba(97, 114, 232, 0.98), rgba(124, 86, 235, 0.98));
+  box-shadow: 0 14px 28px rgba(101, 94, 255, 0.22);
+}
+
+.app-shell--tasks .tasks-create-button svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.app-shell--tasks .tasks-table {
+  gap: 0.56rem;
+}
+
+.app-shell--tasks .tasks-table-head,
+.app-shell--tasks .tasks-table-row {
+  grid-template-columns: minmax(10.8rem, 2.25fr) minmax(8.4rem, 1.02fr) minmax(5rem, 0.76fr) minmax(5.2rem, 0.78fr) minmax(5.2rem, 0.78fr) minmax(6rem, 0.86fr) minmax(7.2rem, 0.72fr);
+  gap: 0.42rem;
+}
+
+.app-shell--tasks .tasks-table-head {
+  padding-inline: 0.56rem;
+  color: #9facce;
+  letter-spacing: 0;
+}
+
+.app-shell--tasks .tasks-sort-button.is-active,
+.app-shell--tasks .tasks-sort-button:hover {
+  color: #eef4ff;
+}
+
+.app-shell--tasks .tasks-sort-icon,
+.app-shell--tasks .tasks-sort-icon.is-active {
+  color: #8ea3ff;
+}
+
+.app-shell--tasks .tasks-table-row {
+  border-color: rgba(78, 96, 139, 0.34);
+  background:
+    linear-gradient(180deg, rgba(13, 22, 39, 0.9), rgba(8, 15, 28, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.app-shell--tasks .tasks-table-row:hover {
+  border-color: rgba(111, 131, 190, 0.5);
+  background:
+    linear-gradient(180deg, rgba(17, 28, 49, 0.94), rgba(9, 17, 32, 0.98));
+}
+
+.app-shell--tasks .tasks-table-cell {
+  color: #c5d0e8;
+}
+
+.app-shell--tasks .tasks-table-cell strong {
+  color: #f6f9ff;
+}
+
+.app-shell--tasks .tasks-status-select {
+  min-height: 2.2rem;
+  padding: 0.44rem 2rem 0.46rem 0.7rem;
+  border-color: rgba(93, 111, 160, 0.42);
+  background:
+    linear-gradient(135deg, rgba(17, 25, 45, 0.96), rgba(13, 19, 35, 0.96));
+  background-color: #0d1424;
+  color: #e8eefc;
+  line-height: 1.35;
+  color-scheme: dark;
+}
+
+.app-shell--tasks .tasks-status-select option {
+  background-color: #0b1220;
+  color: #dce6ff;
+}
+
+.app-shell--tasks .tasks-status-select option:checked {
+  background-color: #293264;
+  color: #ffffff;
+}
+
+.app-shell--tasks .tasks-status-select:hover,
+.app-shell--tasks .tasks-status-select:focus {
+  border-color: rgba(139, 153, 210, 0.55);
+}
+
+.app-shell--tasks .priority-pill--high {
+  border: 1px solid rgba(255, 112, 120, 0.32);
+  background: rgba(137, 48, 66, 0.32);
+  color: #ff9aa2;
+}
+
+.app-shell--tasks .priority-pill--medium {
+  border: 1px solid rgba(237, 159, 50, 0.32);
+  background: rgba(126, 80, 28, 0.3);
+  color: #f1b55f;
+}
+
+.app-shell--tasks .priority-pill--low {
+  border: 1px solid rgba(84, 210, 212, 0.32);
+  background: rgba(30, 95, 104, 0.3);
+  color: #76d6d8;
+}
+
+.app-shell--tasks .tasks-table-cell--actions .icon-button {
+  border-color: rgba(99, 115, 154, 0.28);
+  background: rgba(28, 36, 59, 0.72);
+  color: #aebbe0;
+}
+
+.app-shell--tasks .tasks-table-cell--actions {
+  align-items: center;
+}
+
+.app-shell--tasks .tasks-row-focus-button {
+  display: inline-flex;
+  min-width: 4.58rem;
+  min-height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+  padding: 0.38rem 0.6rem;
+  border: 1px solid rgba(123, 140, 255, 0.42);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(63, 79, 166, 0.78), rgba(51, 70, 139, 0.82));
+  color: #eef3ff;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-shell--tasks .tasks-row-focus-button svg {
+  width: 0.92rem;
+  height: 0.92rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.app-shell--tasks .tasks-row-focus-button:hover {
+  border-color: rgba(145, 158, 255, 0.62);
+  background:
+    linear-gradient(135deg, rgba(83, 96, 196, 0.9), rgba(60, 83, 164, 0.92));
+}
+
+.app-shell--tasks .tasks-table-cell--actions .icon-button:hover {
+  border-color: rgba(255, 112, 120, 0.34);
+  background: rgba(95, 39, 52, 0.48);
+  color: #ff9aa2;
+}
+
+/* Tasks sidebar tree polish */
+.app-shell--tasks .tasks-sidebar-card {
+  position: relative;
+  padding: 0.92rem 0.72rem 0.92rem 0.82rem;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(14, 23, 41, 0.82), rgba(5, 11, 22, 0.96));
+  scrollbar-color: rgba(103, 101, 255, 0.88) rgba(9, 15, 28, 0.56);
+}
+
+.app-shell--tasks .tasks-sidebar-card::-webkit-scrollbar {
+  width: 0.72rem;
+}
+
+.app-shell--tasks .tasks-sidebar-card::-webkit-scrollbar-track {
+  border-left: 1px solid rgba(78, 94, 136, 0.3);
+  border-radius: 999px;
+  background: rgba(7, 13, 25, 0.68);
+}
+
+.app-shell--tasks .tasks-sidebar-card::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(7, 13, 25, 0.78);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(136, 119, 255, 0.95), rgba(78, 98, 234, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(205, 212, 255, 0.16);
+}
+
+.app-shell--tasks .tasks-sidebar-section:first-child {
+  gap: 0.58rem;
+  padding: 0.1rem 0.26rem 0.18rem 0;
+}
+
+.app-shell--tasks .tasks-sidebar-section:first-child .tasks-sidebar-row {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.55rem 0.3rem 0.42rem;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.app-shell--tasks .tasks-sidebar-section:first-child .tasks-sidebar-row.is-active {
+  background: rgba(67, 73, 133, 0.3);
+  box-shadow: none;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label {
+  color: #c6cfe5;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label svg {
+  width: 1.12rem;
+  height: 1.12rem;
+  color: #aeb9da;
+}
+
+.app-shell--tasks .tasks-sidebar-row strong,
+.app-shell--tasks .tasks-tree-row-count {
+  min-width: 1.72rem;
+  min-height: 1.72rem;
+  padding-inline: 0.28rem;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(186, 196, 255, 0.16), transparent 55%),
+    rgba(50, 59, 89, 0.88);
+  color: #e8edff;
+  font-size: 0.82rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 7px 16px rgba(0, 0, 0, 0.16);
+}
+
+.app-shell--tasks .tasks-sidebar-section-header {
+  padding: 0.35rem 0.62rem 0.28rem 0.16rem;
+  color: #bdc6dd;
+  font-size: 0.72rem;
+}
+
+.app-shell--tasks .tasks-sidebar-add {
+  width: 2.05rem;
+  height: 2.05rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(169, 179, 255, 0.18), transparent 58%),
+    rgba(31, 39, 66, 0.92);
+  font-size: 1.08rem;
+}
+
+.app-shell--tasks .tasks-project-row {
+  grid-template-columns: 1.75rem minmax(0, 1fr) 1.85rem;
+  gap: 0.38rem;
+}
+
+.app-shell--tasks .tasks-project-child-row {
+  grid-template-columns: minmax(0, 1fr) 1.85rem;
+  gap: 0.38rem;
+}
+
+.app-shell--tasks .tasks-project-toggle {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(33, 42, 68, 0.92), rgba(17, 25, 43, 0.96));
+  color: #aeb9d6;
+}
+
+.app-shell--tasks .tasks-project-toggle::first-letter {
+  font-size: 0;
+}
+
+.app-shell--tasks .tasks-sidebar-row--project,
+.app-shell--tasks .tasks-sidebar-row--child {
+  min-height: 2.36rem;
+  padding: 0.3rem 0.42rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.app-shell--tasks .tasks-sidebar-row--project:hover,
+.app-shell--tasks .tasks-sidebar-row--child:hover {
+  background: rgba(28, 38, 66, 0.48);
+}
+
+.app-shell--tasks .tasks-sidebar-row--child.is-active {
+  min-height: 2.92rem;
+  border-color: rgba(120, 130, 255, 0.52);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(86, 91, 178, 0.88), rgba(56, 75, 147, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 12px 24px rgba(77, 90, 202, 0.22);
+}
+
+.app-shell--tasks .tasks-sidebar-row--project.is-active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.app-shell--tasks .tasks-sidebar-row-label .collection-badge--compact {
+  max-width: 11.7rem;
+  padding: 0.28rem 0.72rem;
+  border-width: 1px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--collection-badge-color) 30%, rgba(24, 34, 58, 0.92)),
+      color-mix(in srgb, var(--collection-badge-color) 15%, rgba(10, 17, 31, 0.94))
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 18px color-mix(in srgb, var(--collection-badge-color) 18%, transparent);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.app-shell--tasks .tasks-sidebar-row--child.is-active .collection-badge--compact {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--collection-badge-color) 34%, rgba(79, 88, 177, 0.9)),
+      color-mix(in srgb, var(--collection-badge-color) 18%, rgba(49, 63, 137, 0.92))
+    );
+  color: color-mix(in srgb, var(--collection-badge-color) 48%, #ffffff);
+}
+
+.app-shell--tasks .tasks-project-children {
+  gap: 0.38rem;
+  margin-left: 0.92rem;
+  padding-left: 1.14rem;
+}
+
+.app-shell--tasks .tasks-project-children::before {
+  left: 0;
+  top: -0.52rem;
+  bottom: 0.82rem;
+  background: rgba(92, 107, 150, 0.52);
+}
+
+.app-shell--tasks .tasks-project-child-row::before,
+.app-shell--tasks .tasks-project-create-collection::before {
+  left: -1.14rem;
+  width: 0.94rem;
+  background: rgba(92, 107, 150, 0.52);
+}
+
+.app-shell--tasks .tasks-sidebar-row--action {
+  min-height: 2.72rem;
+  justify-content: center;
+  border-color: rgba(106, 121, 163, 0.38);
+  border-radius: 14px;
+  background: rgba(8, 15, 28, 0.58);
+  color: #c7d0e8;
+}
+
+.app-shell--tasks .tasks-sidebar-row--action:hover {
+  background: rgba(20, 30, 52, 0.76);
+  color: #eef4ff;
+}
+
+.app-shell--tasks .tasks-tree-row-end {
+  min-width: 1.85rem;
+}
+
+.app-shell--tasks .tasks-tree-menu-trigger {
+  width: 1.78rem;
+  height: 1.78rem;
+}
+
+/* Focus upcoming due fit */
+.app-shell--focus .focus-panel-card--deadlines {
+  min-height: 8.6rem;
+}
+
+.app-shell--focus .focus-panel-card--deadlines .history-stack {
+  gap: 0.22rem;
+}
+
+.app-shell--focus .focus-due-item {
+  grid-template-columns: 1rem minmax(0, 1fr) minmax(4.4rem, auto) minmax(2.45rem, auto);
+  gap: 0.34rem;
+  min-height: 1.94rem;
+  padding: 0.2rem 0.42rem;
+}
+
+.app-shell--focus .focus-due-item .focus-row-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.app-shell--focus .focus-due-copy strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.68rem;
+  line-height: 1.16;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell--focus .focus-due-item time {
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+.app-shell--focus .focus-due-item .priority-pill {
+  min-width: 2.38rem;
+  padding: 0.14rem 0.34rem;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+/* Report calendar scrolling */
+.app-shell--report .page-shell--report:has(.report-shell--calendar) {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+.app-shell--report .report-shell--calendar {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.app-shell--report .report-shell--calendar .report-calendar-panel {
+  flex: 0 0 auto;
+}
+
+/* Procrastination tracking */
+.focus-shell--procrastination,
+.app-shell--focus .focus-shell--procrastination {
+  --focus-accent: #ff6f8f;
+  --focus-accent-strong: #ffc05f;
+  --focus-glow: rgba(255, 111, 143, 0.2);
+  --focus-glow-secondary: rgba(255, 192, 95, 0.12);
+}
+
+.focus-action-button--procrastinate {
+  border-color: rgba(255, 181, 62, 0.62);
+  background: linear-gradient(135deg, #ffe36b 0%, #ffb23f 48%, #ff8a2f 100%);
+  color: #241504;
+  box-shadow: 0 12px 24px rgba(255, 150, 47, 0.18);
+}
+
+.focus-shell .focus-action-button--procrastinate,
+.app-shell--focus .focus-action-button--procrastinate {
+  border-color: rgba(255, 181, 62, 0.62);
+  background: linear-gradient(135deg, #ffe36b 0%, #ffb23f 48%, #ff8a2f 100%);
+  color: #241504;
+}
+
+.focus-action-button--procrastinate svg {
+  color: #4b2800;
+}
+
+.app-shell--focus .focus-plan-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.app-shell--focus .focus-plan-card--amber {
+  --focus-card-accent: #ff9e5f;
+}
+
+.focus-activity-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.focus-activity-copy span {
+  overflow: hidden;
+  color: #9aa8c5;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.procrastination-note-modal {
+  width: min(32rem, 100%);
+}
+
+.procrastination-note-field {
+  margin-top: 1rem;
+}
+
+.procrastination-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.report-graph-legend-item--procrastination .report-graph-dot,
+.report-trend-line--procrastination,
+.report-trend-point--procrastination {
+  color: #ff6f8f;
+}
+
+.timer-ring--procrastination .timer-ring-segment.is-filled,
+.app-shell--focus .timer-ring--procrastination .timer-ring-segment.is-filled {
+  background: linear-gradient(180deg, #ffc05f, #ff6f8f);
+  box-shadow:
+    0 0 16px rgba(255, 111, 143, 0.34),
+    0 0 4px rgba(255, 192, 95, 0.36);
+}
+
+.app-shell--focus .timer-actions--focus {
+  width: min(100%, 42rem);
+  flex-wrap: nowrap;
+  gap: 0.46rem;
+}
+
+.app-shell--focus .focus-action-button {
+  min-width: 0;
+  min-height: 2.2rem;
+  flex: 0 1 auto;
+  padding: 0.46rem 0.64rem;
+  gap: 0.38rem;
+  font-size: clamp(0.74rem, 1.05vw, 0.92rem);
+  white-space: nowrap;
+}
+
+.app-shell--focus .focus-action-button--primary {
+  min-width: 10.8rem;
+  flex-basis: 11.4rem;
+}
+
+.app-shell--focus .focus-action-button:not(.focus-action-button--primary) {
+  min-width: 6.7rem;
+}
+
+.app-shell--focus .focus-action-button svg {
+  width: 0.92rem;
+  height: 0.92rem;
+}
+
+@media (max-width: 860px) {
+  .app-shell--focus .timer-actions--focus {
+    flex-wrap: wrap;
+  }
+
+  .app-shell--focus .focus-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Report procrastination metrics */
+.app-shell--report .report-summary-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.app-shell--report .report-summary-card {
+  min-height: 5rem;
+  gap: 0.4rem;
+  padding: 0.54rem 0.54rem;
+}
+
+.app-shell--report .report-summary-card--orange {
+  --report-card-accent: #ff9d2f;
+}
+
+.app-shell--report .report-summary-icon {
+  width: 2.02rem;
+  height: 2.02rem;
+}
+
+.app-shell--report .report-summary-icon svg {
+  width: 1.04rem;
+  height: 1.04rem;
+}
+
+.app-shell--report .report-summary-label {
+  font-size: 0.62rem;
+}
+
+.app-shell--report .report-summary-value {
+  font-size: 1.08rem;
+}
+
+.app-shell--report .report-summary-detail,
+.app-shell--report .report-summary-delta {
+  font-size: 0.54rem;
+}
+
+.app-shell--report .report-lower-grid {
+  grid-template-columns: minmax(31rem, 0.92fr) minmax(30rem, 1.08fr);
+}
+
+.app-shell--report .report-activity-body {
+  grid-template-columns: 8.4rem minmax(0, 1fr);
+  gap: 0.72rem;
+}
+
+.app-shell--report .report-activity-calendars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 1.36rem;
+  align-items: start;
+}
+
+.app-shell--report .report-activity-legend-item {
+  gap: 0.46rem;
+}
+
+.app-shell--report .report-activity-legend-swatches {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.26rem;
+  align-items: center;
+}
+
+.app-shell--report .report-activity-legend-item .report-activity-legend-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 999px;
+}
+
+.app-shell--report .report-activity-legend-item.intensity-0 .report-activity-legend-dot {
+  background: #303849;
+}
+
+.app-shell--report .report-activity-legend-item.intensity-1 .report-activity-legend-dot--focus {
+  background: rgba(67, 176, 103, 0.78);
+}
+
+.app-shell--report .report-activity-legend-item.intensity-2 .report-activity-legend-dot--focus {
+  background: rgba(91, 130, 255, 0.88);
+}
+
+.app-shell--report .report-activity-legend-item.intensity-3 .report-activity-legend-dot--focus {
+  background: rgba(139, 100, 255, 0.96);
+}
+
+.app-shell--report .report-activity-legend-item.intensity-1 .report-activity-legend-dot--procrastination {
+  background: rgba(255, 210, 76, 0.82);
+}
+
+.app-shell--report .report-activity-legend-item.intensity-2 .report-activity-legend-dot--procrastination {
+  background: rgba(255, 143, 42, 0.88);
+}
+
+.app-shell--report .report-activity-legend-item.intensity-3 .report-activity-legend-dot--procrastination {
+  background: rgba(232, 70, 70, 0.94);
+}
+
+.report-activity-calendar-block {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.report-activity-calendar-title {
+  color: #dfe6f7;
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.app-shell--report .report-activity-calendars .report-month-activity-weekdays,
+.app-shell--report .report-activity-calendars .report-month-activity-grid {
+  grid-template-columns: repeat(7, 1.02rem);
+  gap: 0.25rem;
+}
+
+.app-shell--report .report-activity-calendars .report-month-activity-day {
+  width: 1.02rem;
+  height: 1.02rem;
+}
+
+.report-month-activity-calendar--procrastination .report-month-activity-day.intensity-1 {
+  background: rgba(255, 210, 76, 0.66);
+  border-color: rgba(255, 223, 112, 0.46);
+}
+
+.report-month-activity-calendar--procrastination .report-month-activity-day.intensity-2 {
+  background: rgba(255, 143, 42, 0.74);
+  border-color: rgba(255, 164, 64, 0.52);
+}
+
+.report-month-activity-calendar--procrastination .report-month-activity-day.intensity-3 {
+  background: rgba(232, 70, 70, 0.86);
+  border-color: rgba(255, 108, 82, 0.6);
+}
+
+.report-month-activity-calendar--procrastination .report-month-activity-day strong {
+  color: #fff7e8;
+  font-size: 0.42rem;
+  letter-spacing: 0;
+}
+
+.app-shell--report .report-trends-tab {
+  gap: 0.52rem;
+}
+
+.app-shell--report .report-trends-tab-grid {
+  grid-template-columns: minmax(0, 1.5fr) minmax(21rem, 0.88fr);
+  gap: 0.55rem;
+}
+
+.app-shell--report .report-procrastination-panel {
+  padding: 0.52rem 0.62rem;
+  gap: 0.46rem;
+}
+
+.app-shell--report .report-procrastination-summary {
+  gap: 0.36rem;
+}
+
+.app-shell--report .report-procrastination-summary span {
+  min-height: 2.35rem;
+  padding: 0.4rem 0.46rem;
+  font-size: 0.54rem;
+}
+
+.app-shell--report .report-procrastination-summary strong {
+  font-size: 0.82rem;
+}
+
+.app-shell--report .report-procrastination-list {
+  gap: 0.38rem;
+}
+
+.app-shell--report .report-procrastination-entry {
+  grid-template-columns: minmax(4rem, 0.38fr) minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.46rem;
+  border-radius: 7px;
+}
+
+.app-shell--report .report-procrastination-entry-time strong {
+  font-size: 0.76rem;
+}
+
+.app-shell--report .report-procrastination-entry-time span,
+.app-shell--report .report-procrastination-entry-copy span {
+  font-size: 0.52rem;
+}
+
+.app-shell--report .report-procrastination-entry-copy p {
+  font-size: 0.58rem;
+  line-height: 1.28;
+}
+
+.app-shell--report .report-procrastination-empty {
+  min-height: 5.4rem;
+  font-size: 0.64rem;
+}
+
+.app-shell--report .report-trend-detail-grid {
+  gap: 0.55rem;
+}
+
+.app-shell--report .report-trend-detail-card {
+  min-height: 4rem;
+  padding: 0.52rem 0.62rem;
+  border-radius: 7px;
+}
+
+.app-shell--report .report-trend-detail-card span {
+  font-size: 0.54rem;
+}
+
+.app-shell--report .report-trend-detail-card strong {
+  font-size: 0.92rem;
+}
+
+.app-shell--report .report-trend-detail-card p {
+  font-size: 0.56rem;
+}
+
+@media (max-width: 1320px) {
+  .app-shell--report .report-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .app-shell--report .report-lower-grid,
+  .app-shell--report .report-trends-tab-grid,
+  .app-shell--report .report-trend-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .app-shell--report .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-shell--report .report-activity-body,
+  .app-shell--report .report-activity-calendars {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell--report .report-procrastination-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-shell--report .report-lower-grid {
+  flex-basis: clamp(13.6rem, 23vh, 15rem);
+  min-height: 13.6rem;
+}
+
+@media (max-height: 760px) {
+  .app-shell--report .report-lower-grid {
+    flex-basis: 13.2rem;
+    min-height: 13.2rem;
+  }
+}
+
+.app-shell--report .report-activity-calendars {
+  gap: 2.35rem;
+}
+
+.app-shell--report .report-lower-grid {
+  flex-basis: clamp(12.7rem, 21vh, 14rem);
+  min-height: 12.7rem;
+}
+
+.app-shell--report .report-performance-panel {
+  padding: 0.46rem 0.62rem;
+}
+
+.app-shell--report .report-performance-panel .report-section-header h2,
+.app-shell--report .report-health-card h3 {
+  font-size: 0.9rem;
+}
+
+.app-shell--report .report-performance-panel .report-section-header p {
+  font-size: 0.68rem;
+}
+
+.app-shell--report .report-snapshot-grid {
+  row-gap: 0.42rem;
+  column-gap: 0.42rem;
+  margin-top: 0.42rem;
+}
+
+.app-shell--report .report-snapshot-card {
+  min-height: 2.7rem;
+  gap: 0.08rem;
+  padding: 0.34rem 0.5rem;
+}
+
+.app-shell--report .report-snapshot-card span {
+  font-size: 0.58rem;
+}
+
+.app-shell--report .report-snapshot-card strong {
+  font-size: 1.06rem;
+}
+
+.app-shell--report .report-snapshot-card em {
+  font-size: 0.54rem;
+}
+
+.app-shell--report .report-health-card {
+  margin-top: 0.42rem;
+  padding: 0.36rem 0.46rem;
+}
+
+.app-shell--report .report-health-content {
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  gap: 0.42rem;
+  margin-top: 0.22rem;
+}
+
+.app-shell--report .report-health-donut {
+  width: 4.2rem;
+  height: 4.2rem;
+}
+
+.app-shell--report .report-health-donut strong {
+  font-size: 0.96rem;
+}
+
+.app-shell--report .report-health-donut span {
+  font-size: 0.5rem;
+}
+
+.app-shell--report .report-health-list {
+  gap: 0.2rem;
+}
+
+.app-shell--report .report-health-row {
+  grid-template-columns: minmax(4.35rem, 0.78fr) minmax(2.8rem, 1fr) minmax(3.25rem, auto);
+  gap: 0.32rem;
+  font-size: 0.55rem;
+}
+
+.app-shell--report .report-health-bar {
+  height: 0.22rem;
+}
+
+@media (max-height: 760px) {
+  .app-shell--report .report-lower-grid {
+    flex-basis: 12.5rem;
+    min-height: 12.5rem;
+  }
+}
+
+.app-shell--report .report-main-grid {
+  min-height: 19.1rem;
+}
+
+.app-shell--report .report-lower-grid {
+  flex-basis: clamp(14.25rem, 24vh, 15.6rem);
+  min-height: 14.25rem;
+}
+
+.app-shell--report .report-activity-panel {
+  padding-bottom: 0.9rem;
+}
+
+.app-shell--report .report-trends-panel,
+.app-shell--report .report-performance-panel {
+  padding-block: 0.42rem;
+}
+
+.app-shell--report .report-graph-canvas {
+  margin-top: 0.1rem;
+}
+
+@media (max-height: 760px) {
+  .app-shell--report .report-main-grid {
+    min-height: 17.8rem;
+  }
+
+  .app-shell--report .report-lower-grid {
+    flex-basis: 13.75rem;
+    min-height: 13.75rem;
   }
 }

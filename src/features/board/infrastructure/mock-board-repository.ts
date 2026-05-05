@@ -19,7 +19,8 @@ import type {
 } from "../../custom-fields/domain/custom-fields.types";
 import type {
   BreakRecord,
-  PomodoroSession
+  PomodoroSession,
+  ProcrastinationRecord
 } from "../../pomodoro/domain/pomodoro.types";
 import type { ArchivedCompletedTask } from "../../report/domain/report-history.types";
 import type { TaskCollection } from "../../tasks/domain/task-collection.types";
@@ -37,9 +38,11 @@ export interface LoadedBoardState {
   taskFieldValues: TaskFieldValue[];
   pomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
+  procrastinationRecords: ProcrastinationRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
+  archivedProcrastinationRecords: ProcrastinationRecord[];
 }
 
 export const loadMockBoardState = (): LoadedBoardState => ({
@@ -167,7 +170,9 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     startedAt: row.started_at,
     endedAt: row.ended_at
   })),
+  procrastinationRecords: [],
   archivedCompletedTasks: [],
   archivedPomodoroSessions: [],
-  archivedBreakRecords: []
+  archivedBreakRecords: [],
+  archivedProcrastinationRecords: []
 });

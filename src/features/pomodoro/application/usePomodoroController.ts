@@ -36,6 +36,13 @@ interface UsePomodoroControllerOptions {
     startedAt: string,
     endedAt: string
   ) => void;
+  onProcrastinationRecorded: (
+    taskId: TaskId,
+    actualDurationSeconds: number,
+    note: string,
+    startedAt: string,
+    endedAt: string
+  ) => void;
 }
 
 const getPlannedDurationForPhase = (
@@ -50,7 +57,11 @@ const getPlannedDurationForPhase = (
     return config.shortBreakDurationSeconds;
   }
 
-  return config.longBreakDurationSeconds;
+  if (phaseType === "long_break") {
+    return config.longBreakDurationSeconds;
+  }
+
+  return 0;
 };
 
 const getRemainingSecondsFromEndsAt = (endsAt: string): number =>
@@ -62,10 +73,32 @@ const getElapsedSecondsFromStartedAt = (startedAt: string, endedAt: string): num
     Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
   );
 
+const getActualDurationForTimerState = (
+  state: Extract<TimerState, { status: "running" | "paused" }>,
+  plannedDurationSeconds: number,
+  endedAt: string
+): number => {
+  if (state.phaseType === "procrastination") {
+    return state.status === "running"
+      ? getElapsedSecondsFromStartedAt(state.startedAt, endedAt)
+      : state.elapsedSeconds;
+  }
+
+  const remainingSeconds =
+    state.status === "running" && state.endsAt !== null
+      ? getRemainingSecondsFromEndsAt(state.endsAt)
+      : state.status === "running"
+        ? state.secondsRemaining
+        : state.remainingSeconds;
+
+  return plannedDurationSeconds - remainingSeconds;
+};
+
 export const usePomodoroController = ({
   onWorkSessionCompleted,
   onWorkSessionInterrupted,
-  onBreakRecorded
+  onBreakRecorded,
+  onProcrastinationRecorded
 }: UsePomodoroControllerOptions) => {
   const [config, setConfig] = useState<PomodoroConfig>(defaultPomodoroConfig);
   const [state, setState] = useState<TimerState>({
@@ -97,7 +130,9 @@ export const usePomodoroController = ({
       phaseType: nextPhaseType,
       startedAt: endedAt,
       endsAt: new Date(Date.now() + nextPhaseDuration * 1000).toISOString(),
+      plannedDurationSeconds: nextPhaseDuration,
       secondsRemaining: nextPhaseDuration,
+      secondsElapsed: 0,
       cycleWorkSessionIndex: completedWorkSessions
     };
   };
@@ -153,6 +188,20 @@ export const usePomodoroController = ({
           return current;
         }
 
+        if (current.phaseType === "procrastination") {
+          return {
+            ...current,
+            secondsElapsed: getElapsedSecondsFromStartedAt(
+              current.startedAt,
+              new Date().toISOString()
+            )
+          };
+        }
+
+        if (current.endsAt === null) {
+          return current;
+        }
+
         const nextSecondsRemaining = getRemainingSecondsFromEndsAt(current.endsAt);
 
         if (nextSecondsRemaining > 0) {
@@ -163,10 +212,7 @@ export const usePomodoroController = ({
         }
 
         const endedAt = new Date().toISOString();
-        const plannedDurationSeconds = getPlannedDurationForPhase(
-          config,
-          current.phaseType
-        );
+        const plannedDurationSeconds = current.plannedDurationSeconds;
 
         void playPomodoroCompletionChime(
           current.phaseType,
@@ -222,19 +268,37 @@ export const usePomodoroController = ({
         phaseType: "work",
         startedAt: new Date().toISOString(),
         endsAt: new Date(Date.now() + config.workDurationSeconds * 1000).toISOString(),
+        plannedDurationSeconds: config.workDurationSeconds,
         secondsRemaining: config.workDurationSeconds,
+        secondsElapsed: 0,
         cycleWorkSessionIndex: 0
       });
     },
-    startShortBreakForTask: (taskId: TaskId) => {
+    startShortBreakForTask: (taskId: TaskId, durationSeconds = config.shortBreakDurationSeconds) => {
       void ensurePomodoroAudioReady();
+      const plannedDurationSeconds = Math.max(60, Math.floor(durationSeconds));
       setState({
         status: "running",
         taskId,
         phaseType: "short_break",
         startedAt: new Date().toISOString(),
-        endsAt: new Date(Date.now() + config.shortBreakDurationSeconds * 1000).toISOString(),
-        secondsRemaining: config.shortBreakDurationSeconds,
+        endsAt: new Date(Date.now() + plannedDurationSeconds * 1000).toISOString(),
+        plannedDurationSeconds,
+        secondsRemaining: plannedDurationSeconds,
+        secondsElapsed: 0,
+        cycleWorkSessionIndex: 0
+      });
+    },
+    startProcrastinatingForTask: (taskId: TaskId) => {
+      setState({
+        status: "running",
+        taskId,
+        phaseType: "procrastination",
+        startedAt: new Date().toISOString(),
+        endsAt: null,
+        plannedDurationSeconds: 0,
+        secondsRemaining: 0,
+        secondsElapsed: 0,
         cycleWorkSessionIndex: 0
       });
     },
@@ -248,7 +312,15 @@ export const usePomodoroController = ({
           status: "paused",
           taskId: current.taskId,
           phaseType: current.phaseType,
-          remainingSeconds: getRemainingSecondsFromEndsAt(current.endsAt),
+          plannedDurationSeconds: current.plannedDurationSeconds,
+          remainingSeconds:
+            current.phaseType === "procrastination" || current.endsAt === null
+              ? 0
+              : getRemainingSecondsFromEndsAt(current.endsAt),
+          elapsedSeconds:
+            current.phaseType === "procrastination"
+              ? getElapsedSecondsFromStartedAt(current.startedAt, new Date().toISOString())
+              : current.secondsElapsed,
           cycleWorkSessionIndex: current.cycleWorkSessionIndex,
           startedAt: current.startedAt
         };
@@ -265,9 +337,17 @@ export const usePomodoroController = ({
           status: "running",
           taskId: current.taskId,
           phaseType: current.phaseType,
-          startedAt: current.startedAt,
-          endsAt: new Date(Date.now() + current.remainingSeconds * 1000).toISOString(),
+          startedAt:
+            current.phaseType === "procrastination"
+              ? new Date(Date.now() - current.elapsedSeconds * 1000).toISOString()
+              : current.startedAt,
+          endsAt:
+            current.phaseType === "procrastination"
+              ? null
+              : new Date(Date.now() + current.remainingSeconds * 1000).toISOString(),
+          plannedDurationSeconds: current.plannedDurationSeconds,
           secondsRemaining: current.remainingSeconds,
+          secondsElapsed: current.elapsedSeconds,
           cycleWorkSessionIndex: current.cycleWorkSessionIndex
         };
       });
@@ -284,13 +364,17 @@ export const usePomodoroController = ({
         }
 
         const endedAt = new Date().toISOString();
-        const plannedDurationSeconds = getPlannedDurationForPhase(config, "work");
+        const plannedDurationSeconds = current.plannedDurationSeconds;
+        const actualDurationSeconds = Math.min(
+          plannedDurationSeconds,
+          Math.max(getActualDurationForTimerState(current, plannedDurationSeconds, endedAt), 0)
+        );
         void playPomodoroCompletionChime("work", config.workCompletionChime);
 
         onWorkSessionCompleted(
           current.taskId,
           plannedDurationSeconds,
-          plannedDurationSeconds,
+          actualDurationSeconds,
           current.startedAt,
           endedAt
         );
@@ -308,15 +392,20 @@ export const usePomodoroController = ({
           return current;
         }
 
+        if (current.phaseType === "procrastination") {
+          return {
+            status: "idle",
+            taskId: current.taskId
+          };
+        }
+
         const endedAt = new Date().toISOString();
-        const plannedDurationSeconds = getPlannedDurationForPhase(
-          config,
-          current.phaseType
+        const plannedDurationSeconds = current.plannedDurationSeconds;
+        const actualDurationSeconds = getActualDurationForTimerState(
+          current,
+          plannedDurationSeconds,
+          endedAt
         );
-        const actualDurationSeconds =
-          current.status === "running"
-            ? getElapsedSecondsFromStartedAt(current.startedAt, endedAt)
-            : plannedDurationSeconds - current.remainingSeconds;
 
         if (current.phaseType === "work") {
           onWorkSessionInterrupted(
@@ -344,54 +433,122 @@ export const usePomodoroController = ({
         };
       });
     },
-    skipBreak: () => {
+    finishBreak: () => {
       setState((current) => {
         if (current.status !== "running" && current.status !== "paused") {
           return current;
         }
 
-        if (current.phaseType === "work") {
+        if (current.phaseType === "work" || current.phaseType === "procrastination") {
           return current;
         }
 
         const endedAt = new Date().toISOString();
-        const plannedDurationSeconds = getPlannedDurationForPhase(
-          config,
-          current.phaseType
+        const plannedDurationSeconds = current.plannedDurationSeconds;
+        const actualDurationSeconds = getActualDurationForTimerState(
+          current,
+          plannedDurationSeconds,
+          endedAt
         );
-        const actualDurationSeconds =
-          current.status === "running"
-            ? getElapsedSecondsFromStartedAt(current.startedAt, endedAt)
-            : plannedDurationSeconds - current.remainingSeconds;
 
         onBreakRecorded(
           current.taskId,
           current.phaseType,
           plannedDurationSeconds,
           Math.max(actualDurationSeconds, 0),
-          "skipped",
+          "completed",
           current.startedAt,
           endedAt
         );
 
         return {
-          status: "running",
-          taskId: current.taskId,
-          phaseType: "work",
-          startedAt: endedAt,
-          endsAt: new Date(
-            Date.now() + config.workDurationSeconds * 1000
-          ).toISOString(),
-          secondsRemaining: config.workDurationSeconds,
-          cycleWorkSessionIndex: current.cycleWorkSessionIndex
+          status: "idle",
+          taskId: current.taskId
+        };
+      });
+    },
+    cancel: () => {
+      setState((current) => {
+        if (current.status !== "running" && current.status !== "paused") {
+          return current;
+        }
+
+        return {
+          status: "idle",
+          taskId: current.taskId
+        };
+      });
+    },
+    stopProcrastinating: (note: string) => {
+      setState((current) => {
+        if (
+          (current.status !== "running" && current.status !== "paused") ||
+          current.phaseType !== "procrastination"
+        ) {
+          return current;
+        }
+
+        const endedAt = new Date().toISOString();
+        const actualDurationSeconds =
+          current.status === "running"
+            ? getElapsedSecondsFromStartedAt(current.startedAt, endedAt)
+            : current.elapsedSeconds;
+
+        onProcrastinationRecorded(
+          current.taskId,
+          Math.max(actualDurationSeconds, 0),
+          note.trim(),
+          current.startedAt,
+          endedAt
+        );
+
+        return {
+          status: "idle",
+          taskId: current.taskId
         };
       });
     },
     reset: () => {
-      setState((current) => ({
-        status: "idle",
-        taskId: current.taskId
-      }));
+      setState((current) => {
+        if (current.status === "idle") {
+          return current;
+        }
+
+        if (current.phaseType === "procrastination") {
+          return current.status === "running"
+            ? {
+                ...current,
+                startedAt: new Date().toISOString(),
+                secondsElapsed: 0
+              }
+            : {
+                ...current,
+                elapsedSeconds: 0,
+                startedAt: new Date().toISOString()
+              };
+        }
+
+        const plannedDurationSeconds = current.plannedDurationSeconds;
+
+        if (current.status === "paused") {
+          return {
+            ...current,
+            remainingSeconds: plannedDurationSeconds,
+            elapsedSeconds: 0,
+            plannedDurationSeconds,
+            startedAt: new Date().toISOString()
+          };
+        }
+
+        return {
+          ...current,
+          startedAt: new Date().toISOString(),
+          endsAt: new Date(Date.now() + plannedDurationSeconds * 1000).toISOString(),
+          plannedDurationSeconds,
+          secondsRemaining: plannedDurationSeconds,
+          secondsElapsed: 0
+        };
+      });
     },
     updateConfig: (nextConfig: PomodoroConfig) => {
       setConfig(nextConfig);

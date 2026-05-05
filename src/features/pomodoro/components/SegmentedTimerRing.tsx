@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 interface SegmentedTimerRingProps {
   progress: number;
-  tone: "work" | "short_break" | "long_break" | "idle";
+  tone: "work" | "short_break" | "long_break" | "procrastination" | "idle";
 }
 
 const totalSegments = 60;
@@ -18,9 +18,14 @@ export const SegmentedTimerRing = ({
   const progressStyle = {
     "--timer-progress": `${normalizedProgress * 360}deg`
   } as CSSProperties;
+  const isEmpty = normalizedProgress === 0;
 
   return (
-    <div className={`timer-ring timer-ring--${tone}`} aria-hidden="true" style={progressStyle}>
+    <div
+      className={`timer-ring timer-ring--${tone}${isEmpty ? " is-empty" : ""}`}
+      aria-hidden="true"
+      style={progressStyle}
+    >
       <span className="timer-ring-halo timer-ring-halo--outer" />
       <span className="timer-ring-halo timer-ring-halo--inner" />
       <span className="timer-ring-core" />

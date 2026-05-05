@@ -7,6 +7,7 @@ import {
   demoColumnRows,
   demoFieldDefinitionRows,
   demoPomodoroSessionRows,
+  demoProcrastinationRecordRows,
   demoTaskCollectionRows,
   demoTaskProjectRows,
   demoTaskFieldAssignmentRows,
@@ -91,6 +92,15 @@ const insertBreakRecord = `
   )
 `;
 
+const insertProcrastinationRecord = `
+  INSERT INTO procrastination_records (
+    id, task_id, actual_duration_seconds, note, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @note, @started_at, @ended_at
+  )
+`;
+
 const insertArchivedCompletedTask = `
   INSERT INTO archived_completed_tasks (
     id, original_task_id, title, priority, estimated_completion_date, completed_at,
@@ -123,6 +133,15 @@ const insertArchivedBreakRecord = `
   VALUES (
     @id, @task_id, @phase_type, @planned_duration_seconds, @actual_duration_seconds,
     @action, @started_at, @ended_at
+  )
+`;
+
+const insertArchivedProcrastinationRecord = `
+  INSERT INTO archived_procrastination_records (
+    id, task_id, actual_duration_seconds, note, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @note, @started_at, @ended_at
   )
 `;
 
@@ -300,6 +319,20 @@ export class AppDatabase {
       started_at: string;
       ended_at: string | null;
     }>;
+    const procrastinationRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, note, started_at, ended_at
+         FROM procrastination_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      note: string;
+      started_at: string;
+      ended_at: string;
+    }>;
     const archivedCompletedTasks = this.db
       .prepare(
         `SELECT id, original_task_id, title, priority, estimated_completion_date, completed_at,
@@ -356,6 +389,20 @@ export class AppDatabase {
       action: "completed" | "skipped";
       started_at: string;
       ended_at: string | null;
+    }>;
+    const archivedProcrastinationRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, note, started_at, ended_at
+         FROM archived_procrastination_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      note: string;
+      started_at: string;
+      ended_at: string;
     }>;
 
     return {
@@ -485,6 +532,14 @@ export class AppDatabase {
         startedAt: row.started_at as string,
         endedAt: row.ended_at as string | null
       })),
+      procrastinationRecords: procrastinationRecords.map((row) => ({
+        id: row.id as BoardSnapshot["procrastinationRecords"][number]["id"],
+        taskId: row.task_id as BoardSnapshot["procrastinationRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        note: row.note,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
+      })),
       archivedCompletedTasks: archivedCompletedTasks.map((row) => ({
         id: row.id as BoardSnapshot["archivedCompletedTasks"][number]["id"],
         originalTaskId:
@@ -520,15 +575,26 @@ export class AppDatabase {
         action: row.action as BoardSnapshot["archivedBreakRecords"][number]["action"],
         startedAt: row.started_at as string,
         endedAt: row.ended_at as string | null
+      })),
+      archivedProcrastinationRecords: archivedProcrastinationRecords.map((row) => ({
+        id: row.id as BoardSnapshot["archivedProcrastinationRecords"][number]["id"],
+        taskId:
+          row.task_id as BoardSnapshot["archivedProcrastinationRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        note: row.note,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
       }))
     };
   }
 
   public saveBoardSnapshot(snapshot: BoardSnapshot): void {
     const transaction = this.db.transaction((currentSnapshot: BoardSnapshot) => {
+      this.db.prepare("DELETE FROM archived_procrastination_records").run();
       this.db.prepare("DELETE FROM archived_break_records").run();
       this.db.prepare("DELETE FROM archived_pomodoro_sessions").run();
       this.db.prepare("DELETE FROM archived_completed_tasks").run();
+      this.db.prepare("DELETE FROM procrastination_records").run();
       this.db.prepare("DELETE FROM break_records").run();
       this.db.prepare("DELETE FROM pomodoro_sessions").run();
       this.db.prepare("DELETE FROM task_field_values").run();
@@ -674,6 +740,20 @@ export class AppDatabase {
         });
       });
 
+      const insertProcrastinationRecordStatement = this.db.prepare(
+        insertProcrastinationRecord
+      );
+      currentSnapshot.procrastinationRecords.forEach((record) => {
+        insertProcrastinationRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
+          note: record.note,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
       const insertArchivedCompletedTaskStatement = this.db.prepare(insertArchivedCompletedTask);
       currentSnapshot.archivedCompletedTasks.forEach((task) => {
         insertArchivedCompletedTaskStatement.run({
@@ -718,6 +798,20 @@ export class AppDatabase {
           planned_duration_seconds: record.plannedDurationSeconds,
           actual_duration_seconds: record.actualDurationSeconds,
           action: record.action,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
+      const insertArchivedProcrastinationRecordStatement = this.db.prepare(
+        insertArchivedProcrastinationRecord
+      );
+      currentSnapshot.archivedProcrastinationRecords.forEach((record) => {
+        insertArchivedProcrastinationRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
+          note: record.note,
           started_at: record.startedAt,
           ended_at: record.endedAt
         });
@@ -866,6 +960,15 @@ export class AppDatabase {
         ended_at TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS procrastination_records (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        actual_duration_seconds INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS archived_completed_tasks (
         id TEXT PRIMARY KEY,
         original_task_id TEXT NOT NULL,
@@ -902,6 +1005,15 @@ export class AppDatabase {
         action TEXT NOT NULL,
         started_at TEXT NOT NULL,
         ended_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS archived_procrastination_records (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        actual_duration_seconds INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -1004,6 +1116,13 @@ export class AppDatabase {
 
       const insertBreakRecordStatement = this.db.prepare(insertBreakRecord);
       demoBreakRecordRows.forEach((row) => insertBreakRecordStatement.run(row));
+
+      const insertProcrastinationRecordStatement = this.db.prepare(
+        insertProcrastinationRecord
+      );
+      demoProcrastinationRecordRows.forEach((row) =>
+        insertProcrastinationRecordStatement.run(row)
+      );
 
       this.savePomodoroConfig(defaultPomodoroConfig);
     });

@@ -41,6 +41,7 @@ export type TaskView =
   | { type: "today" }
   | { type: "tomorrow" }
   | { type: "month" }
+  | { type: "scheduled" }
   | TasksNavigationView;
 
 export interface TasksNavigationIntent {
@@ -115,6 +116,7 @@ interface TasksPageProps {
   onSelectedViewChange: (view: TaskView) => void;
   navigationIntent: TasksNavigationIntent | null;
   onConsumeNavigationIntent: (requestId: number) => void;
+  onFocusTask: (taskId: TaskId) => void;
   actions: {
     selectTask: (taskId: TaskId) => void;
     createTaskProject: (name: string) => void;
@@ -262,6 +264,80 @@ const SortIndicator = ({
   </svg>
 );
 
+type TaskFilterIconName =
+  | "today"
+  | "tomorrow"
+  | "month"
+  | "scheduled"
+  | "incomplete"
+  | "search"
+  | "plus"
+  | "focus";
+
+const TaskFilterIcon = ({ name }: { name: TaskFilterIconName }): JSX.Element => {
+  switch (name) {
+    case "today":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="4" y="5" width="16" height="15" rx="3" />
+          <path d="M8 3v4M16 3v4M4 10h16" />
+          <path d="M9 15h6" />
+        </svg>
+      );
+    case "tomorrow":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4.2" />
+          <path d="M12 2.8v2.1M12 19.1v2.1M4.2 4.2l1.5 1.5M18.3 18.3l1.5 1.5M2.8 12h2.1M19.1 12h2.1M4.2 19.8l1.5-1.5M18.3 5.7l1.5-1.5" />
+        </svg>
+      );
+    case "month":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="4" y="4.8" width="16" height="15.2" rx="3" />
+          <path d="M8 3v4M16 3v4M4 10h16" />
+          <path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2" />
+        </svg>
+      );
+    case "scheduled":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="4" y="4.8" width="16" height="15.2" rx="3" />
+          <path d="M8 3v4M16 3v4M4 10h16" />
+          <path d="m8 15 2.2 2.2L16 13" />
+        </svg>
+      );
+    case "incomplete":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3a9 9 0 1 0 9 9" />
+          <path d="M12 3v4M21 12h-4" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="6.2" />
+          <path d="m16 16 4 4" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "focus":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="7" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+      );
+  }
+};
+
 const getViewTitle = (
   view: TaskView,
   taskCollectionsById: Map<TaskCollectionId, TaskCollection>,
@@ -277,6 +353,10 @@ const getViewTitle = (
 
   if (view.type === "month") {
     return "This Month";
+  }
+
+  if (view.type === "scheduled") {
+    return "Scheduled Tasks";
   }
 
   if (view.type === "all") {
@@ -321,6 +401,7 @@ export const TasksPage = ({
   onSelectedViewChange,
   navigationIntent,
   onConsumeNavigationIntent,
+  onFocusTask,
   actions
 }: TasksPageProps): JSX.Element => {
   const [modalState, setModalState] = useState<ModalState>(null);
@@ -542,6 +623,10 @@ export const TasksPage = ({
       tomorrow: incompleteTasks.filter((task) => task.estimatedCompletionDate === tomorrowKey).length,
       month: incompleteTasks.filter((task) => matchesThisMonth(task.estimatedCompletionDate, now))
         .length,
+      scheduled: incompleteTasks.filter(
+        (task) =>
+          task.estimatedCompletionDate !== null && task.estimatedCompletionDate.trim() !== ""
+      ).length,
       all: incompleteTasks.length
     }),
     [incompleteTasks, now, todayKey, tomorrowKey]
@@ -558,6 +643,18 @@ export const TasksPage = ({
 
     if (selectedView.type === "month") {
       return incompleteTasks.filter((task) => matchesThisMonth(task.estimatedCompletionDate, now));
+    }
+
+    if (selectedView.type === "scheduled") {
+      return incompleteTasks
+        .filter(
+          (task) =>
+            task.estimatedCompletionDate !== null && task.estimatedCompletionDate.trim() !== ""
+        )
+        .slice()
+        .sort((left, right) =>
+          compareOptionalDate(left.estimatedCompletionDate, right.estimatedCompletionDate, "asc")
+        );
     }
 
     if (selectedView.type === "project") {
@@ -1138,7 +1235,10 @@ export const TasksPage = ({
             onClick={() => setSelectedView({ type: "today" })}
             type="button"
           >
-            <span>Today</span>
+            <span className="tasks-sidebar-filter-label">
+              <TaskFilterIcon name="today" />
+              <span>Today</span>
+            </span>
             <strong>{counts.today}</strong>
           </button>
           <button
@@ -1146,7 +1246,10 @@ export const TasksPage = ({
             onClick={() => setSelectedView({ type: "tomorrow" })}
             type="button"
           >
-            <span>Tomorrow</span>
+            <span className="tasks-sidebar-filter-label">
+              <TaskFilterIcon name="tomorrow" />
+              <span>Tomorrow</span>
+            </span>
             <strong>{counts.tomorrow}</strong>
           </button>
           <button
@@ -1154,15 +1257,32 @@ export const TasksPage = ({
             onClick={() => setSelectedView({ type: "month" })}
             type="button"
           >
-            <span>This Month</span>
+            <span className="tasks-sidebar-filter-label">
+              <TaskFilterIcon name="month" />
+              <span>This Month</span>
+            </span>
             <strong>{counts.month}</strong>
+          </button>
+          <button
+            className={`tasks-sidebar-row${selectedView.type === "scheduled" ? " is-active" : ""}`}
+            onClick={() => setSelectedView({ type: "scheduled" })}
+            type="button"
+          >
+            <span className="tasks-sidebar-filter-label">
+              <TaskFilterIcon name="scheduled" />
+              <span>Scheduled</span>
+            </span>
+            <strong>{counts.scheduled}</strong>
           </button>
           <button
             className={`tasks-sidebar-row${selectedView.type === "all" ? " is-active" : ""}`}
             onClick={() => setSelectedView({ type: "all" })}
             type="button"
           >
-            <span>Incomplete Tasks</span>
+            <span className="tasks-sidebar-filter-label">
+              <TaskFilterIcon name="incomplete" />
+              <span>Incomplete Tasks</span>
+            </span>
             <strong>{counts.all}</strong>
           </button>
         </div>
@@ -1533,7 +1653,12 @@ export const TasksPage = ({
       <section className="tasks-main">
         <div className="tasks-main-header">
           <div className="board-title">
-            <h2>{viewTitle}</h2>
+            <div className="tasks-title-row">
+              <h2>{viewTitle}</h2>
+              {activeViewBadge ? (
+                <CollectionBadge color={activeViewBadge.color} compact name={activeViewBadge.name} />
+              ) : null}
+            </div>
             <p>
               {sortedVisibleTasks.length} task{sortedVisibleTasks.length === 1 ? "" : "s"} in
               view.
@@ -1542,6 +1667,9 @@ export const TasksPage = ({
           <div className="tasks-main-header-actions">
             <label className="tasks-search-field">
               <span className="sr-only">Search current task list</span>
+              <span className="tasks-search-icon">
+                <TaskFilterIcon name="search" />
+              </span>
               <input
                 type="search"
                 value={searchQuery}
@@ -1549,10 +1677,8 @@ export const TasksPage = ({
                 placeholder="Search tasks"
               />
             </label>
-            {activeViewBadge ? (
-              <CollectionBadge color={activeViewBadge.color} name={activeViewBadge.name} />
-            ) : null}
-            <button className="primary-button" onClick={openCreateTaskModal} type="button">
+            <button className="primary-button tasks-create-button" onClick={openCreateTaskModal} type="button">
+              <TaskFilterIcon name="plus" />
               Create task
             </button>
           </div>
@@ -1702,6 +1828,19 @@ export const TasksPage = ({
                       {task.estimatedCompletionDate ?? "Unplanned"}
                     </div>
                     <div className="tasks-table-cell tasks-table-cell--actions">
+                      <button
+                        aria-label={`Focus ${task.title}`}
+                        className="tasks-row-focus-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onFocusTask(task.id);
+                        }}
+                        title="Focus task"
+                        type="button"
+                      >
+                        <TaskFilterIcon name="focus" />
+                        <span>Focus</span>
+                      </button>
                       <button
                         aria-label="Delete task"
                         className="icon-button icon-button--muted"

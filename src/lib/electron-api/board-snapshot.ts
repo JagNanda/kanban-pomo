@@ -8,7 +8,8 @@ import type {
 import type {
   BreakRecord,
   PomodoroConfig,
-  PomodoroSession
+  PomodoroSession,
+  ProcrastinationRecord
 } from "../../features/pomodoro/domain/pomodoro.types";
 import type { ArchivedCompletedTask } from "../../features/report/domain/report-history.types";
 import type { TaskCollection } from "../../features/tasks/domain/task-collection.types";
@@ -26,9 +27,11 @@ export interface BoardSnapshot {
   taskFieldValues: TaskFieldValue[];
   pomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
+  procrastinationRecords: ProcrastinationRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
+  archivedProcrastinationRecords: ProcrastinationRecord[];
 }
 
 export interface AppSettingsSnapshot {
