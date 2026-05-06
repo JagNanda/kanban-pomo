@@ -126,17 +126,18 @@ export const CalendarInput = ({
       return;
     }
 
-    const handlePointerDown = (event: MouseEvent): void => {
+    const handlePointerDown = (event: PointerEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
 
-    window.addEventListener("mousedown", handlePointerDown);
-    return () => window.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
   }, [isOpen]);
 
   const cells = getCalendarCells(visibleMonth);
+  const todayIsoDate = formatIsoDate(new Date());
 
   return (
     <div className="calendar-input" ref={rootRef}>
@@ -225,7 +226,10 @@ export const CalendarInput = ({
               <button
                 className={`calendar-day${
                   cell.isCurrentMonth ? "" : " is-muted"
-                }${cell.isoDate === value ? " is-selected" : ""}`}
+                }${cell.isoDate === todayIsoDate ? " is-today" : ""}${
+                  cell.isoDate === value ? " is-selected" : ""
+                }`}
+                aria-current={cell.isoDate === todayIsoDate ? "date" : undefined}
                 disabled={!cell.isCurrentMonth}
                 key={cell.isoDate}
                 onClick={() => {

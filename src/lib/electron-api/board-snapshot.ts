@@ -7,6 +7,7 @@ import type {
 } from "../../features/custom-fields/domain/custom-fields.types";
 import type {
   BreakRecord,
+  InterruptionRecord,
   PomodoroConfig,
   PomodoroSession,
   ProcrastinationRecord
@@ -28,10 +29,12 @@ export interface BoardSnapshot {
   pomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
+  interruptionRecords: InterruptionRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
+  archivedInterruptionRecords: InterruptionRecord[];
 }
 
 export interface AppSettingsSnapshot {

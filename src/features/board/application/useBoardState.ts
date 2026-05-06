@@ -10,6 +10,7 @@ import type {
 } from "../../custom-fields/domain/custom-fields.types";
 import type {
   BreakRecord,
+  InterruptionRecord,
   PomodoroSession,
   ProcrastinationRecord
 } from "../../pomodoro/domain/pomodoro.types";
@@ -50,10 +51,12 @@ export interface BoardViewState {
   pomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
+  interruptionRecords: InterruptionRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
+  archivedInterruptionRecords: InterruptionRecord[];
   selectedTaskId: TaskId | null;
 }
 
@@ -128,6 +131,7 @@ const buildArchivedDeletionState = (
   | "archivedPomodoroSessions"
   | "archivedBreakRecords"
   | "archivedProcrastinationRecords"
+  | "archivedInterruptionRecords"
 > => {
   const deletedCompletedTasks = current.tasks.filter(
     (task) => deletedTaskIds.has(task.id) && task.completedAt !== null
@@ -139,7 +143,8 @@ const buildArchivedDeletionState = (
       archivedCompletedTasks: current.archivedCompletedTasks,
       archivedPomodoroSessions: current.archivedPomodoroSessions,
       archivedBreakRecords: current.archivedBreakRecords,
-      archivedProcrastinationRecords: current.archivedProcrastinationRecords
+      archivedProcrastinationRecords: current.archivedProcrastinationRecords,
+      archivedInterruptionRecords: current.archivedInterruptionRecords
     };
   }
 
@@ -192,6 +197,12 @@ const buildArchivedDeletionState = (
       ...current.procrastinationRecords.filter((record) =>
         deletedCompletedTaskIds.has(record.taskId)
       )
+    ],
+    archivedInterruptionRecords: [
+      ...current.archivedInterruptionRecords,
+      ...current.interruptionRecords.filter((record) =>
+        deletedCompletedTaskIds.has(record.taskId)
+      )
     ]
   };
 };
@@ -226,6 +237,9 @@ const buildTaskDeletionState = (
       (record) => !deletedTaskIds.has(record.taskId)
     ),
     procrastinationRecords: current.procrastinationRecords.filter(
+      (record) => !deletedTaskIds.has(record.taskId)
+    ),
+    interruptionRecords: current.interruptionRecords.filter(
       (record) => !deletedTaskIds.has(record.taskId)
     ),
     ...archivedDeletionState
@@ -331,6 +345,8 @@ const toBoardViewState = (
   ),
   procrastinationRecords: snapshot.procrastinationRecords ?? [],
   archivedProcrastinationRecords: snapshot.archivedProcrastinationRecords ?? [],
+  interruptionRecords: snapshot.interruptionRecords ?? [],
+  archivedInterruptionRecords: snapshot.archivedInterruptionRecords ?? [],
   selectedTaskId: selectedTaskId ?? snapshot.tasks[0]?.id ?? null
 });
 
@@ -346,10 +362,12 @@ const toBoardSnapshot = (state: BoardViewState): BoardSnapshot => ({
   pomodoroSessions: state.pomodoroSessions,
   breakRecords: state.breakRecords,
   procrastinationRecords: state.procrastinationRecords,
+  interruptionRecords: state.interruptionRecords,
   archivedCompletedTasks: state.archivedCompletedTasks,
   archivedPomodoroSessions: state.archivedPomodoroSessions,
   archivedBreakRecords: state.archivedBreakRecords,
-  archivedProcrastinationRecords: state.archivedProcrastinationRecords
+  archivedProcrastinationRecords: state.archivedProcrastinationRecords,
+  archivedInterruptionRecords: state.archivedInterruptionRecords
 });
 
 const getApplicableFieldDefinitions = (
@@ -966,6 +984,9 @@ export const useBoardState = () => {
           procrastinationRecords: current.procrastinationRecords.filter(
             (record) => !deletedTaskIds.has(record.taskId)
           ),
+          interruptionRecords: current.interruptionRecords.filter(
+            (record) => !deletedTaskIds.has(record.taskId)
+          ),
           selectedTaskId:
             current.selectedTaskId !== null && deletedTaskIds.has(current.selectedTaskId)
               ? survivingTasks[0]?.id ?? null
@@ -1554,6 +1575,28 @@ export const useBoardState = () => {
             taskId,
             actualDurationSeconds,
             note,
+            startedAt,
+            endedAt
+          }
+        ]
+      }));
+    },
+    recordInterruption: (
+      taskId: TaskId,
+      actualDurationSeconds: number,
+      reason: string,
+      startedAt: string,
+      endedAt: string
+    ) => {
+      updateState((current) => ({
+        ...current,
+        interruptionRecords: [
+          ...current.interruptionRecords,
+          {
+            id: createId("interruption") as InterruptionRecord["id"],
+            taskId,
+            actualDurationSeconds,
+            reason,
             startedAt,
             endedAt
           }

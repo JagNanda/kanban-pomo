@@ -1811,7 +1811,6 @@ export const TasksPage = ({
                         <span className={`priority-pill priority-pill--${task.priority}`}>
                           {task.priority}
                         </span>
-                        <OverdueIndicator task={task} />
                       </div>
                     </div>
                     <div className="tasks-table-cell">
@@ -1824,8 +1823,9 @@ export const TasksPage = ({
                     <div className="tasks-table-cell">
                       <StopwatchIcons count={task.pomodoroCount} size="sm" tone="completed" />
                     </div>
-                    <div className="tasks-table-cell">
-                      {task.estimatedCompletionDate ?? "Unplanned"}
+                    <div className="tasks-table-cell tasks-table-cell--due-date">
+                      <span>{task.estimatedCompletionDate ?? "Unplanned"}</span>
+                      <OverdueIndicator task={task} />
                     </div>
                     <div className="tasks-table-cell tasks-table-cell--actions">
                       <button
@@ -1839,7 +1839,6 @@ export const TasksPage = ({
                         type="button"
                       >
                         <TaskFilterIcon name="focus" />
-                        <span>Focus</span>
                       </button>
                       <button
                         aria-label="Delete task"

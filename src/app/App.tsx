@@ -101,7 +101,8 @@ export const App = (): JSX.Element => {
     onWorkSessionCompleted: boardState.actions.recordCompletedPomodoro,
     onWorkSessionInterrupted: boardState.actions.recordInterruptedPomodoro,
     onBreakRecorded: boardState.actions.recordBreak,
-    onProcrastinationRecorded: boardState.actions.recordProcrastination
+    onProcrastinationRecorded: boardState.actions.recordProcrastination,
+    onInterruptionRecorded: boardState.actions.recordInterruption
   });
 
   if (boardState.isLoading || pomodoro.isLoading) {
@@ -153,6 +154,10 @@ export const App = (): JSX.Element => {
     ? boardState.state.procrastinationRecords.filter((record) => record.taskId === focusTask.id)
     : [];
 
+  const focusTaskInterruptionHistory = focusTask
+    ? boardState.state.interruptionRecords.filter((record) => record.taskId === focusTask.id)
+    : [];
+
   const handleStartFocus = (taskId: TaskId): void => {
     boardState.actions.ensureTaskInDev(taskId);
     boardState.actions.selectTask(taskId);
@@ -164,6 +169,14 @@ export const App = (): JSX.Element => {
     boardState.actions.ensureTaskInDev(taskId);
     boardState.actions.selectTask(taskId);
     setCurrentPage("focus");
+  };
+
+  const handleCompleteFocusTask = (taskId: TaskId): void => {
+    if (!completedColumnId) {
+      return;
+    }
+
+    boardState.actions.moveTask(taskId, completedColumnId);
   };
 
   const handleOpenTaskInTasks = (
@@ -299,9 +312,11 @@ export const App = (): JSX.Element => {
               allPomodoroSessions={boardState.state.pomodoroSessions}
               allBreakRecords={boardState.state.breakRecords}
               allProcrastinationRecords={boardState.state.procrastinationRecords}
+              allInterruptionRecords={boardState.state.interruptionRecords}
               taskSessionHistory={focusTaskSessionHistory}
               breakHistory={focusTaskBreakHistory}
               procrastinationHistory={focusTaskProcrastinationHistory}
+              interruptionHistory={focusTaskInterruptionHistory}
               onSelectTask={(taskId) => boardState.actions.selectTask(taskId)}
               onViewAllUpcomingDue={handleViewAllUpcomingDue}
               onViewAllRecentActivity={handleViewAllRecentActivity}
@@ -312,6 +327,8 @@ export const App = (): JSX.Element => {
               onStartProcrastinating={(taskId) =>
                 pomodoro.actions.startProcrastinatingForTask(taskId)
               }
+              canCompleteTask={completedColumnId !== null}
+              onCompleteTask={handleCompleteFocusTask}
               onConfigChange={pomodoro.actions.updateConfig}
               onFinish={pomodoro.actions.finish}
               onFinishBreak={pomodoro.actions.finishBreak}
@@ -319,6 +336,8 @@ export const App = (): JSX.Element => {
               onResume={pomodoro.actions.resume}
               onCancel={pomodoro.actions.cancel}
               onStopProcrastinating={pomodoro.actions.stopProcrastinating}
+              onStartInterruption={pomodoro.actions.startInterruption}
+              onStopInterruption={pomodoro.actions.stopInterruption}
               onReset={pomodoro.actions.reset}
             />
           ) : (
@@ -332,6 +351,8 @@ export const App = (): JSX.Element => {
               archivedBreakRecords={boardState.state.archivedBreakRecords}
               procrastinationRecords={boardState.state.procrastinationRecords}
               archivedProcrastinationRecords={boardState.state.archivedProcrastinationRecords}
+              interruptionRecords={boardState.state.interruptionRecords}
+              archivedInterruptionRecords={boardState.state.archivedInterruptionRecords}
               initialViewMode={reportInitialViewMode}
               onOpenTask={handleOpenTaskInTasks}
             />

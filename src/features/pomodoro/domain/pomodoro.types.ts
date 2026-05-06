@@ -4,7 +4,13 @@ import type { TaskId } from "../../tasks/domain/task.types";
 export type PomodoroSessionId = Brand<string, "PomodoroSessionId">;
 export type BreakRecordId = Brand<string, "BreakRecordId">;
 export type ProcrastinationRecordId = Brand<string, "ProcrastinationRecordId">;
-export type PomodoroPhaseType = "work" | "short_break" | "long_break" | "procrastination";
+export type InterruptionRecordId = Brand<string, "InterruptionRecordId">;
+export type PomodoroPhaseType =
+  | "work"
+  | "short_break"
+  | "long_break"
+  | "procrastination"
+  | "interruption";
 export type PomodoroSessionStatus = "completed" | "interrupted" | "abandoned";
 export type BreakAction = "completed" | "skipped";
 export type PomodoroChimeId =
@@ -55,6 +61,26 @@ export interface ProcrastinationRecord {
   endedAt: string;
 }
 
+export interface InterruptionRecord {
+  id: InterruptionRecordId;
+  taskId: TaskId;
+  actualDurationSeconds: number;
+  reason: string;
+  startedAt: string;
+  endedAt: string;
+}
+
+interface InterruptedFocusTimerState {
+  priorStatus: "running" | "paused";
+  taskId: TaskId;
+  phaseType: "work";
+  plannedDurationSeconds: number;
+  remainingSeconds: number;
+  elapsedSeconds: number;
+  cycleWorkSessionIndex: number;
+  startedAt: string;
+}
+
 export type TimerState =
   | {
       status: "idle";
@@ -63,7 +89,7 @@ export type TimerState =
   | {
       status: "running";
       taskId: TaskId;
-      phaseType: PomodoroPhaseType;
+      phaseType: Exclude<PomodoroPhaseType, "interruption">;
       startedAt: string;
       endsAt: string | null;
       plannedDurationSeconds: number;
@@ -74,10 +100,22 @@ export type TimerState =
   | {
       status: "paused";
       taskId: TaskId;
-      phaseType: PomodoroPhaseType;
+      phaseType: Exclude<PomodoroPhaseType, "interruption">;
       plannedDurationSeconds: number;
       remainingSeconds: number;
       elapsedSeconds: number;
       cycleWorkSessionIndex: number;
       startedAt: string;
+    }
+  | {
+      status: "running";
+      taskId: TaskId;
+      phaseType: "interruption";
+      startedAt: string;
+      endsAt: null;
+      plannedDurationSeconds: 0;
+      secondsRemaining: 0;
+      secondsElapsed: number;
+      cycleWorkSessionIndex: number;
+      interruptedTimer: InterruptedFocusTimerState;
     };

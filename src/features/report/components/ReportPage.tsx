@@ -13,6 +13,7 @@ import {
 import type { Task, TaskId, TaskPriority } from "../../tasks/domain/task.types";
 import type {
   BreakRecord,
+  InterruptionRecord,
   PomodoroSession,
   ProcrastinationRecord
 } from "../../pomodoro/domain/pomodoro.types";
@@ -29,6 +30,8 @@ interface ReportPageProps {
   archivedBreakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
+  interruptionRecords: InterruptionRecord[];
+  archivedInterruptionRecords: InterruptionRecord[];
   initialViewMode?: ReportViewMode;
   onOpenTask: (taskId: Task["id"], intentMode: "default" | "completed") => void;
 }
@@ -42,6 +45,7 @@ type ReportIconName =
   | "warning"
   | "calendar"
   | "procrastination"
+  | "interruption"
   | "external";
 type MetricDirection = "up" | "down" | "neutral";
 
@@ -72,6 +76,7 @@ interface TrendPoint {
   focusMinutes: number;
   breakMinutes: number;
   procrastinationMinutes: number;
+  interruptionMinutes: number;
   pomodoros: number;
 }
 
@@ -112,6 +117,16 @@ interface ProcrastinationReportEntry {
   timeLabel: string;
   durationSeconds: number;
   note: string;
+  startedAt: string;
+}
+
+interface InterruptionReportEntry {
+  id: string;
+  taskTitle: string;
+  dateLabel: string;
+  timeLabel: string;
+  durationSeconds: number;
+  reason: string;
   startedAt: string;
 }
 
@@ -203,6 +218,19 @@ const ReportIcon = ({ name }: { name: ReportIconName }): JSX.Element => {
           <path d="M9 3c0 4 6 5 6 9s-6 5-6 9" />
           <path d="M15 3c0 4-6 5-6 9s6 5 6 9" />
           <path d="M10 17h4" />
+        </svg>
+      );
+    case "interruption":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3v5" />
+          <path d="M12 16v5" />
+          <path d="M3 12h5" />
+          <path d="M16 12h5" />
+          <path d="m5.6 5.6 3.5 3.5" />
+          <path d="m14.9 14.9 3.5 3.5" />
+          <path d="m18.4 5.6-3.5 3.5" />
+          <path d="m9.1 14.9-3.5 3.5" />
         </svg>
       );
     case "external":
@@ -458,7 +486,8 @@ const getMonthTrendData = (
   month: Date,
   pomodoroSessions: PomodoroSession[],
   breakRecords: BreakRecord[],
-  procrastinationRecords: ProcrastinationRecord[]
+  procrastinationRecords: ProcrastinationRecord[],
+  interruptionRecords: InterruptionRecord[]
 ): TrendPoint[] => {
   const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
   const totalsByDay = new Map<number, TrendPoint>();
@@ -472,6 +501,7 @@ const getMonthTrendData = (
       focusMinutes: 0,
       breakMinutes: 0,
       procrastinationMinutes: 0,
+      interruptionMinutes: 0,
       pomodoros: 0
     });
   });
@@ -537,6 +567,27 @@ const getMonthTrendData = (
 
     point.procrastinationMinutes = Math.round(
       point.procrastinationMinutes + record.actualDurationSeconds / 60
+    );
+  });
+
+  interruptionRecords.forEach((record) => {
+    const interruptionDate = new Date(record.startedAt);
+    const interruptionKey = `${interruptionDate.getFullYear()}-${String(
+      interruptionDate.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+    if (interruptionKey !== monthKey) {
+      return;
+    }
+
+    const point = totalsByDay.get(interruptionDate.getDate());
+
+    if (!point) {
+      return;
+    }
+
+    point.interruptionMinutes = Math.round(
+      point.interruptionMinutes + record.actualDurationSeconds / 60
     );
   });
 
@@ -665,8 +716,21 @@ const sumProcrastinationSecondsInMonth = (
     .filter((record) => isInMonth(record.startedAt, month))
     .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
 
+const sumInterruptionSecondsInMonth = (
+  records: InterruptionRecord[],
+  month: Date
+): number =>
+  records
+    .filter((record) => isInMonth(record.startedAt, month))
+    .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
+
 const countProcrastinationRecordsInMonth = (
   records: ProcrastinationRecord[],
+  month: Date
+): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
+
+const countInterruptionRecordsInMonth = (
+  records: InterruptionRecord[],
   month: Date
 ): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
 
@@ -866,6 +930,8 @@ export const ReportPage = ({
   archivedBreakRecords,
   procrastinationRecords,
   archivedProcrastinationRecords,
+  interruptionRecords,
+  archivedInterruptionRecords,
   initialViewMode = "overview",
   onOpenTask
 }: ReportPageProps): JSX.Element => {
@@ -898,6 +964,10 @@ export const ReportPage = ({
   const allProcrastinationRecords = useMemo(
     () => [...procrastinationRecords, ...archivedProcrastinationRecords],
     [archivedProcrastinationRecords, procrastinationRecords]
+  );
+  const allInterruptionRecords = useMemo(
+    () => [...interruptionRecords, ...archivedInterruptionRecords],
+    [archivedInterruptionRecords, interruptionRecords]
   );
   const taskTitleById = useMemo(
     () =>
@@ -955,9 +1025,16 @@ export const ReportPage = ({
         visibleMonth,
         allPomodoroSessions,
         allBreakRecords,
-        allProcrastinationRecords
+        allProcrastinationRecords,
+        allInterruptionRecords
       ),
-    [allBreakRecords, allPomodoroSessions, allProcrastinationRecords, visibleMonth]
+    [
+      allBreakRecords,
+      allInterruptionRecords,
+      allPomodoroSessions,
+      allProcrastinationRecords,
+      visibleMonth
+    ]
   );
   const monthlyProcrastinationEntries = useMemo<ProcrastinationReportEntry[]>(
     () =>
@@ -988,6 +1065,36 @@ export const ReportPage = ({
           };
         }),
     [allProcrastinationRecords, taskTitleById, visibleMonth]
+  );
+  const monthlyInterruptionEntries = useMemo<InterruptionReportEntry[]>(
+    () =>
+      allInterruptionRecords
+        .filter((record) => isInMonth(record.startedAt, visibleMonth))
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()
+        )
+        .map((record) => {
+          const startedAt = new Date(record.startedAt);
+
+          return {
+            id: record.id,
+            taskTitle: taskTitleById.get(record.taskId) ?? "Archived task",
+            dateLabel: startedAt.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric"
+            }),
+            timeLabel: startedAt.toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit"
+            }),
+            durationSeconds: record.actualDurationSeconds,
+            reason: record.reason.trim(),
+            startedAt: record.startedAt
+          };
+        }),
+    [allInterruptionRecords, taskTitleById, visibleMonth]
   );
   const monthSessions = useMemo(
     () => allPomodoroSessions.filter((session) => isInMonth(session.startedAt, visibleMonth)),
@@ -1022,8 +1129,20 @@ export const ReportPage = ({
     allProcrastinationRecords,
     priorMonth
   );
+  const interruptionSeconds = sumInterruptionSecondsInMonth(
+    allInterruptionRecords,
+    visibleMonth
+  );
+  const priorInterruptionSeconds = sumInterruptionSecondsInMonth(
+    allInterruptionRecords,
+    priorMonth
+  );
   const procrastinationEntries = countProcrastinationRecordsInMonth(
     allProcrastinationRecords,
+    visibleMonth
+  );
+  const interruptionEntries = countInterruptionRecordsInMonth(
+    allInterruptionRecords,
     visibleMonth
   );
   const currentStreak = getCurrentStreak(allPomodoroSessions, referenceDate);
@@ -1081,6 +1200,16 @@ export const ReportPage = ({
       direction: getDeltaDirection(procrastinationSeconds, priorProcrastinationSeconds, true)
     },
     {
+      id: "interruptions",
+      icon: "interruption",
+      tone: "red",
+      label: "Interruptions",
+      value: formatMetricDuration(interruptionSeconds),
+      detail: `${interruptionEntries} ${interruptionEntries === 1 ? "entry" : "entries"}`,
+      delta: formatDurationDelta(interruptionSeconds, priorInterruptionSeconds),
+      direction: getDeltaDirection(interruptionSeconds, priorInterruptionSeconds, true)
+    },
+    {
       id: "streak",
       icon: "flame",
       tone: "cyan",
@@ -1117,11 +1246,13 @@ export const ReportPage = ({
   const focusMinutesSeries = trendData.map((point) => point.focusMinutes);
   const breakMinutesSeries = trendData.map((point) => point.breakMinutes);
   const procrastinationMinutesSeries = trendData.map((point) => point.procrastinationMinutes);
+  const interruptionMinutesSeries = trendData.map((point) => point.interruptionMinutes);
   const leftAxisMax = Math.max(
     60,
     ...focusMinutesSeries,
     ...breakMinutesSeries,
-    ...procrastinationMinutesSeries
+    ...procrastinationMinutesSeries,
+    ...interruptionMinutesSeries
   );
   const chartPadding = {
     top: 24,
@@ -1152,6 +1283,13 @@ export const ReportPage = ({
     chartHeight,
     chartPadding
   );
+  const interruptionPath = buildLinePath(
+    interruptionMinutesSeries,
+    leftAxisMax,
+    chartWidth,
+    chartHeight,
+    chartPadding
+  );
   const selectedTrendPoint =
     trendData.find((point) => point.day === selectedTrendDay) ?? trendData[0] ?? null;
   const selectedTrendIndex = selectedTrendPoint ? trendData.indexOf(selectedTrendPoint) : 0;
@@ -1172,6 +1310,11 @@ export const ReportPage = ({
         : heaviest,
     null
   );
+  const heaviestInterruptionPoint = trendData.reduce<TrendPoint | null>(
+    (heaviest, point) =>
+      !heaviest || point.interruptionMinutes > heaviest.interruptionMinutes ? point : heaviest,
+    null
+  );
   const longestProcrastinationEntry = monthlyProcrastinationEntries.reduce<
     ProcrastinationReportEntry | null
   >(
@@ -1179,16 +1322,28 @@ export const ReportPage = ({
       !longest || entry.durationSeconds > longest.durationSeconds ? entry : longest,
     null
   );
-  const trackedWorkSeconds = focusSeconds + procrastinationSeconds;
+  const longestInterruptionEntry = monthlyInterruptionEntries.reduce<
+    InterruptionReportEntry | null
+  >(
+    (longest, entry) =>
+      !longest || entry.durationSeconds > longest.durationSeconds ? entry : longest,
+    null
+  );
+  const trackedWorkSeconds = focusSeconds + procrastinationSeconds + interruptionSeconds;
   const focusBalance =
     trackedWorkSeconds > 0 ? Math.round((focusSeconds / trackedWorkSeconds) * 100) : 0;
   const notesCaptured = monthlyProcrastinationEntries.filter((entry) => entry.note.length > 0).length;
+  const reasonsCaptured = monthlyInterruptionEntries.filter(
+    (entry) => entry.reason.length > 0
+  ).length;
   const trendDetailCards: TrendDetailCard[] = [
     {
       id: "focus-balance",
       label: "Focus balance",
       value: `${focusBalance}%`,
-      detail: `${formatMetricDuration(focusSeconds)} focus / ${formatMetricDuration(procrastinationSeconds)} procrastination`,
+      detail: `${formatMetricDuration(focusSeconds)} focus / ${formatMetricDuration(
+        procrastinationSeconds + interruptionSeconds
+      )} distracted`,
       tone: "blue"
     },
     {
@@ -1205,24 +1360,37 @@ export const ReportPage = ({
       tone: "orange"
     },
     {
-      id: "longest-entry",
-      label: "Longest entry",
-      value: longestProcrastinationEntry
-        ? formatMetricDuration(longestProcrastinationEntry.durationSeconds)
-        : "0m",
-      detail: longestProcrastinationEntry
-        ? `${longestProcrastinationEntry.dateLabel} - ${longestProcrastinationEntry.taskTitle}`
-        : "No entries this month",
+      id: "peak-interruption",
+      label: "Peak interruption day",
+      value:
+        heaviestInterruptionPoint && heaviestInterruptionPoint.interruptionMinutes > 0
+          ? `${visibleMonth.toLocaleDateString(undefined, { month: "short" })} ${heaviestInterruptionPoint.day}`
+          : "None",
+      detail:
+        heaviestInterruptionPoint && heaviestInterruptionPoint.interruptionMinutes > 0
+          ? formatMinutesDuration(heaviestInterruptionPoint.interruptionMinutes)
+          : "No interruptions this month",
       tone: "red"
     },
     {
-      id: "notes-captured",
-      label: "Notes captured",
-      value: `${notesCaptured} / ${monthlyProcrastinationEntries.length}`,
+      id: "longest-interruption",
+      label: "Longest interruption",
+      value: longestInterruptionEntry
+        ? formatMetricDuration(longestInterruptionEntry.durationSeconds)
+        : "0m",
+      detail: longestInterruptionEntry
+        ? `${longestInterruptionEntry.dateLabel} - ${longestInterruptionEntry.taskTitle}`
+        : "No interruptions this month",
+      tone: "violet"
+    },
+    {
+      id: "reasons-captured",
+      label: "Reasons captured",
+      value: `${reasonsCaptured} / ${monthlyInterruptionEntries.length}`,
       detail:
-        monthlyProcrastinationEntries.length > 0
-          ? `${Math.round((notesCaptured / monthlyProcrastinationEntries.length) * 100)}% with notes`
-          : "No entries this month",
+        monthlyInterruptionEntries.length > 0
+          ? `${Math.round((reasonsCaptured / monthlyInterruptionEntries.length) * 100)}% with reasons`
+          : "No interruptions this month",
       tone: "violet"
     }
   ];
@@ -1266,6 +1434,10 @@ export const ReportPage = ({
           <div className="report-graph-legend-item report-graph-legend-item--procrastination">
             <span className="report-graph-dot" />
             <strong>Procrastination</strong>
+          </div>
+          <div className="report-graph-legend-item report-graph-legend-item--interruption">
+            <span className="report-graph-dot" />
+            <strong>Interruptions</strong>
           </div>
         </div>
       </div>
@@ -1329,7 +1501,7 @@ export const ReportPage = ({
               />
               <foreignObject
                 className="report-trend-tooltip-wrap"
-                height="108"
+                height="130"
                 width="170"
                 x={Math.min(selectedTrendX + 16, chartWidth - 220)}
                 y={Math.max(8, selectedTrendFocusY - 74)}
@@ -1346,6 +1518,9 @@ export const ReportPage = ({
                     Procrastination{" "}
                     {formatMinutesDuration(selectedTrendPoint.procrastinationMinutes)}
                   </span>
+                  <span>
+                    Interruptions {formatMinutesDuration(selectedTrendPoint.interruptionMinutes)}
+                  </span>
                 </div>
               </foreignObject>
             </g>
@@ -1354,6 +1529,7 @@ export const ReportPage = ({
           <path className="report-trend-line report-trend-line--focus" d={focusPath} />
           <path className="report-trend-line report-trend-line--breaks" d={breakPath} />
           <path className="report-trend-line report-trend-line--procrastination" d={procrastinationPath} />
+          <path className="report-trend-line report-trend-line--interruption" d={interruptionPath} />
 
           {trendData.map((point, index) => {
             const x =
@@ -1371,12 +1547,17 @@ export const ReportPage = ({
               chartPadding.top +
               usableHeight -
               (point.procrastinationMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
+            const interruptionY =
+              chartPadding.top +
+              usableHeight -
+              (point.interruptionMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
 
             return (
               <g key={`point-${point.day}`} onMouseEnter={() => setSelectedTrendDay(point.day)}>
                 <circle className="report-trend-point report-trend-point--focus" cx={x} cy={focusY} r="4" />
                 <circle className="report-trend-point report-trend-point--breaks" cx={x} cy={breakY} r="4" />
                 <circle className="report-trend-point report-trend-point--procrastination" cx={x} cy={procrastinationY} r="4" />
+                <circle className="report-trend-point report-trend-point--interruption" cx={x} cy={interruptionY} r="4" />
                 <rect
                   className="report-trend-hit-area"
                   height={chartHeight - chartPadding.top - chartPadding.bottom}
@@ -1434,7 +1615,7 @@ export const ReportPage = ({
               role="tab"
               type="button"
             >
-              {mode[0]?.toUpperCase()}{mode.slice(1)}
+              {mode === "trends" ? "Logs" : `${mode[0]?.toUpperCase()}${mode.slice(1)}`}
             </button>
           ))}
         </div>
@@ -1573,8 +1754,6 @@ export const ReportPage = ({
       ) : viewMode === "trends" ? (
         <div className="report-trends-tab">
           <div className="report-trends-tab-grid">
-            {chartSection}
-
             <section className="report-panel report-procrastination-panel">
               <div className="report-section-header">
                 <div>
@@ -1628,6 +1807,61 @@ export const ReportPage = ({
               ) : (
                 <div className="report-procrastination-empty">
                   No procrastination recorded this month.
+                </div>
+              )}
+            </section>
+
+            <section className="report-panel report-procrastination-panel report-interruption-panel">
+              <div className="report-section-header">
+                <div>
+                  <h2>Interruption Log</h2>
+                  <p>
+                    {formatMonthLabel(visibleMonth)} - {formatMetricDuration(interruptionSeconds)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="report-procrastination-summary">
+                <span>
+                  <strong>{monthlyInterruptionEntries.length}</strong>
+                  entries
+                </span>
+                <span>
+                  <strong>
+                    {monthlyInterruptionEntries.length > 0
+                      ? formatMetricDuration(
+                          Math.round(interruptionSeconds / monthlyInterruptionEntries.length)
+                        )
+                      : "0m"}
+                  </strong>
+                  avg
+                </span>
+                <span>
+                  <strong>{reasonsCaptured}</strong>
+                  reasons
+                </span>
+              </div>
+
+              {monthlyInterruptionEntries.length > 0 ? (
+                <div className="report-procrastination-list">
+                  {monthlyInterruptionEntries.map((entry) => (
+                    <article className="report-procrastination-entry" key={entry.id}>
+                      <div className="report-procrastination-entry-time">
+                        <strong>{formatMetricDuration(entry.durationSeconds)}</strong>
+                        <span>
+                          {entry.dateLabel} - {entry.timeLabel}
+                        </span>
+                      </div>
+                      <div className="report-procrastination-entry-copy">
+                        <span>{entry.taskTitle}</span>
+                        <p>{entry.reason.length > 0 ? entry.reason : "No reason"}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="report-procrastination-empty">
+                  No interruptions recorded this month.
                 </div>
               )}
             </section>

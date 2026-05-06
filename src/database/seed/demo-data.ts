@@ -2,6 +2,7 @@ import type { BoardRow } from "../models/board-row";
 import type { BreakRecordRow } from "../models/break-record-row";
 import type { ColumnRow } from "../models/column-row";
 import type { FieldDefinitionRow } from "../models/field-definition-row";
+import type { InterruptionRecordRow } from "../models/interruption-record-row";
 import type { PomodoroSessionRow } from "../models/pomodoro-session-row";
 import type { ProcrastinationRecordRow } from "../models/procrastination-record-row";
 import type { TaskCollectionRow } from "../models/task-collection-row";
@@ -212,3 +213,5 @@ export const demoBreakRecordRows: BreakRecordRow[] = [
 ];
 
 export const demoProcrastinationRecordRows: ProcrastinationRecordRow[] = [];
+
+export const demoInterruptionRecordRows: InterruptionRecordRow[] = [];

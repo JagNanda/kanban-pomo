@@ -3,6 +3,7 @@ import {
   demoBreakRecordRows,
   demoColumnRows,
   demoFieldDefinitionRows,
+  demoInterruptionRecordRows,
   demoPomodoroSessionRows,
   demoTaskCollectionRows,
   demoTaskProjectRows,
@@ -19,6 +20,7 @@ import type {
 } from "../../custom-fields/domain/custom-fields.types";
 import type {
   BreakRecord,
+  InterruptionRecord,
   PomodoroSession,
   ProcrastinationRecord
 } from "../../pomodoro/domain/pomodoro.types";
@@ -39,10 +41,12 @@ export interface LoadedBoardState {
   pomodoroSessions: PomodoroSession[];
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
+  interruptionRecords: InterruptionRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
+  archivedInterruptionRecords: InterruptionRecord[];
 }
 
 export const loadMockBoardState = (): LoadedBoardState => ({
@@ -171,8 +175,17 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     endedAt: row.ended_at
   })),
   procrastinationRecords: [],
+  interruptionRecords: demoInterruptionRecordRows.map((row) => ({
+    id: row.id as InterruptionRecord["id"],
+    taskId: row.task_id as InterruptionRecord["taskId"],
+    actualDurationSeconds: row.actual_duration_seconds,
+    reason: row.reason,
+    startedAt: row.started_at,
+    endedAt: row.ended_at
+  })),
   archivedCompletedTasks: [],
   archivedPomodoroSessions: [],
   archivedBreakRecords: [],
-  archivedProcrastinationRecords: []
+  archivedProcrastinationRecords: [],
+  archivedInterruptionRecords: []
 });

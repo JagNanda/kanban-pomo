@@ -6,6 +6,7 @@ import {
   demoBreakRecordRows,
   demoColumnRows,
   demoFieldDefinitionRows,
+  demoInterruptionRecordRows,
   demoPomodoroSessionRows,
   demoProcrastinationRecordRows,
   demoTaskCollectionRows,
@@ -102,6 +103,15 @@ const insertProcrastinationRecord = `
   )
 `;
 
+const insertInterruptionRecord = `
+  INSERT INTO interruption_records (
+    id, task_id, actual_duration_seconds, reason, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @reason, @started_at, @ended_at
+  )
+`;
+
 const insertArchivedCompletedTask = `
   INSERT INTO archived_completed_tasks (
     id, original_task_id, title, priority, estimated_completion_date, completed_at,
@@ -143,6 +153,15 @@ const insertArchivedProcrastinationRecord = `
   )
   VALUES (
     @id, @task_id, @actual_duration_seconds, @note, @started_at, @ended_at
+  )
+`;
+
+const insertArchivedInterruptionRecord = `
+  INSERT INTO archived_interruption_records (
+    id, task_id, actual_duration_seconds, reason, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @reason, @started_at, @ended_at
   )
 `;
 
@@ -333,6 +352,20 @@ export class AppDatabase {
       started_at: string;
       ended_at: string;
     }>;
+    const interruptionRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, reason, started_at, ended_at
+         FROM interruption_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      reason: string;
+      started_at: string;
+      ended_at: string;
+    }>;
     const archivedCompletedTasks = this.db
       .prepare(
         `SELECT id, original_task_id, title, priority, estimated_completion_date, completed_at,
@@ -401,6 +434,20 @@ export class AppDatabase {
       task_id: string;
       actual_duration_seconds: number;
       note: string;
+      started_at: string;
+      ended_at: string;
+    }>;
+    const archivedInterruptionRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, reason, started_at, ended_at
+         FROM archived_interruption_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      reason: string;
       started_at: string;
       ended_at: string;
     }>;
@@ -540,6 +587,14 @@ export class AppDatabase {
         startedAt: row.started_at,
         endedAt: row.ended_at
       })),
+      interruptionRecords: interruptionRecords.map((row) => ({
+        id: row.id as BoardSnapshot["interruptionRecords"][number]["id"],
+        taskId: row.task_id as BoardSnapshot["interruptionRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        reason: row.reason,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
+      })),
       archivedCompletedTasks: archivedCompletedTasks.map((row) => ({
         id: row.id as BoardSnapshot["archivedCompletedTasks"][number]["id"],
         originalTaskId:
@@ -584,16 +639,27 @@ export class AppDatabase {
         note: row.note,
         startedAt: row.started_at,
         endedAt: row.ended_at
+      })),
+      archivedInterruptionRecords: archivedInterruptionRecords.map((row) => ({
+        id: row.id as BoardSnapshot["archivedInterruptionRecords"][number]["id"],
+        taskId:
+          row.task_id as BoardSnapshot["archivedInterruptionRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        reason: row.reason,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
       }))
     };
   }
 
   public saveBoardSnapshot(snapshot: BoardSnapshot): void {
     const transaction = this.db.transaction((currentSnapshot: BoardSnapshot) => {
+      this.db.prepare("DELETE FROM archived_interruption_records").run();
       this.db.prepare("DELETE FROM archived_procrastination_records").run();
       this.db.prepare("DELETE FROM archived_break_records").run();
       this.db.prepare("DELETE FROM archived_pomodoro_sessions").run();
       this.db.prepare("DELETE FROM archived_completed_tasks").run();
+      this.db.prepare("DELETE FROM interruption_records").run();
       this.db.prepare("DELETE FROM procrastination_records").run();
       this.db.prepare("DELETE FROM break_records").run();
       this.db.prepare("DELETE FROM pomodoro_sessions").run();
@@ -754,6 +820,18 @@ export class AppDatabase {
         });
       });
 
+      const insertInterruptionRecordStatement = this.db.prepare(insertInterruptionRecord);
+      currentSnapshot.interruptionRecords.forEach((record) => {
+        insertInterruptionRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
+          reason: record.reason,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
       const insertArchivedCompletedTaskStatement = this.db.prepare(insertArchivedCompletedTask);
       currentSnapshot.archivedCompletedTasks.forEach((task) => {
         insertArchivedCompletedTaskStatement.run({
@@ -812,6 +890,20 @@ export class AppDatabase {
           task_id: record.taskId,
           actual_duration_seconds: record.actualDurationSeconds,
           note: record.note,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
+      const insertArchivedInterruptionRecordStatement = this.db.prepare(
+        insertArchivedInterruptionRecord
+      );
+      currentSnapshot.archivedInterruptionRecords.forEach((record) => {
+        insertArchivedInterruptionRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
+          reason: record.reason,
           started_at: record.startedAt,
           ended_at: record.endedAt
         });
@@ -899,6 +991,11 @@ export class AppDatabase {
       );
       demoProcrastinationRecordRows.forEach((row) =>
         insertProcrastinationRecordStatement.run(row)
+      );
+
+      const insertInterruptionRecordStatement = this.db.prepare(insertInterruptionRecord);
+      demoInterruptionRecordRows.forEach((row) =>
+        insertInterruptionRecordStatement.run(row)
       );
 
       this.savePomodoroConfig(defaultPomodoroConfig);

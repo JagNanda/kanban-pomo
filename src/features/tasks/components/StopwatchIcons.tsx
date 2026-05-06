@@ -7,8 +7,6 @@ interface StopwatchIconsProps {
 const getDimensions = (size: StopwatchIconsProps["size"]): number =>
   size === "sm" ? 16 : 18;
 
-const compactCountThreshold = 10;
-
 const StopwatchSvg = ({
   tone,
   size = "md"
@@ -44,20 +42,10 @@ export const StopwatchIcons = ({
     return <span className="stopwatch-empty">0</span>;
   }
 
-  if (count >= compactCountThreshold) {
-    return (
-      <span className="stopwatch-list stopwatch-list--counted" role="img">
-        <StopwatchSvg size={size} tone={tone} />
-        <span className="stopwatch-count">x{count}</span>
-      </span>
-    );
-  }
-
   return (
-    <span className="stopwatch-list" role="img">
-      {Array.from({ length: count }).map((_, index) => (
-        <StopwatchSvg key={`${tone}-${index}`} size={size} tone={tone} />
-      ))}
+    <span className="stopwatch-list stopwatch-list--counted" role="img">
+      <StopwatchSvg size={size} tone={tone} />
+      <span className="stopwatch-count">x{count}</span>
     </span>
   );
 };

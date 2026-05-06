@@ -1411,10 +1411,25 @@ textarea {
   cursor: not-allowed;
 }
 
+.calendar-day.is-today {
+  border-color: rgba(107, 229, 138, 0.82);
+  color: #f7fff9;
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 229, 138, 0.32),
+    0 0 0 1px rgba(107, 229, 138, 0.1);
+}
+
 .calendar-day.is-selected {
   border-color: rgba(255, 111, 105, 0.85);
   background: rgba(102, 38, 40, 0.96);
   color: #ffffff;
+}
+
+.calendar-day.is-selected.is-today {
+  border-color: rgba(107, 229, 138, 0.92);
+  box-shadow:
+    inset 0 0 0 1px rgba(107, 229, 138, 0.38),
+    0 0 0 1px rgba(255, 111, 105, 0.24);
 }
 
 .calendar-footer {
@@ -1985,7 +2000,7 @@ textarea {
 .tasks-table-head,
 .tasks-table-row {
   display: grid;
-  grid-template-columns: minmax(10.8rem, 2.25fr) minmax(8.4rem, 1.02fr) minmax(5rem, 0.76fr) minmax(5.2rem, 0.78fr) minmax(5.2rem, 0.78fr) minmax(6rem, 0.86fr) minmax(7.2rem, 0.72fr);
+  grid-template-columns: minmax(10.8rem, 2fr) minmax(10.25rem, 1.14fr) minmax(5rem, 0.74fr) minmax(5.2rem, 0.76fr) minmax(5.2rem, 0.76fr) minmax(6rem, 0.84fr) minmax(7.2rem, 0.7fr);
   gap: 0.42rem;
   align-items: center;
 }
@@ -5431,8 +5446,9 @@ button.report-task-summary-stat:hover {
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
-  grid-template-columns: minmax(0, 1.58fr) minmax(20rem, 0.82fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+  align-items: stretch;
 }
 
 .report-procrastination-panel {
@@ -5441,6 +5457,7 @@ button.report-task-summary-stat:hover {
   flex-direction: column;
   gap: 0.7rem;
   padding: 0.85rem 1rem;
+  overflow: hidden;
 }
 
 .report-procrastination-summary {
@@ -5476,6 +5493,8 @@ button.report-task-summary-stat:hover {
 
 .report-procrastination-list {
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   gap: 0.52rem;
   min-height: 0;
   overflow-y: auto;
@@ -7375,8 +7394,20 @@ button.report-snapshot-card {
   align-items: stretch;
 }
 
+.app-shell--tasks .page-shell--tasks {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.app-shell--tasks .tasks-layout {
+  min-height: 0;
+  height: 100%;
+}
+
 .app-shell--tasks .tasks-sidebar-card,
 .app-shell--tasks .tasks-main {
+  min-height: 0;
+  min-width: 0;
   border-color: var(--tasks-border);
   background:
     linear-gradient(180deg, rgba(14, 23, 41, 0.92), rgba(7, 13, 25, 0.96));
@@ -7389,6 +7420,7 @@ button.report-snapshot-card {
   gap: 0.86rem;
   min-height: 0;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -7507,6 +7539,8 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-main {
+  height: 100%;
+  overflow: hidden;
   padding: 1.05rem 1.1rem;
 }
 
@@ -7597,12 +7631,24 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   gap: 0.56rem;
+}
+
+.app-shell--tasks .tasks-table-body {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0.16rem;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .app-shell--tasks .tasks-table-head,
 .app-shell--tasks .tasks-table-row {
-  grid-template-columns: minmax(10.8rem, 2.25fr) minmax(8.4rem, 1.02fr) minmax(5rem, 0.76fr) minmax(5.2rem, 0.78fr) minmax(5.2rem, 0.78fr) minmax(6rem, 0.86fr) minmax(7.2rem, 0.72fr);
+  grid-template-columns: minmax(10.8rem, 2fr) minmax(10.25rem, 1.14fr) minmax(5rem, 0.74fr) minmax(5.2rem, 0.76fr) minmax(5.2rem, 0.76fr) minmax(6rem, 0.84fr) minmax(7.2rem, 0.7fr);
   gap: 0.42rem;
 }
 
@@ -7689,6 +7735,10 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-table-cell--actions .icon-button {
+  width: 2.42rem;
+  height: 2.42rem;
+  flex: 0 0 2.42rem;
+  padding: 0;
   border-color: rgba(99, 115, 154, 0.28);
   background: rgba(28, 36, 59, 0.72);
   color: #aebbe0;
@@ -7696,16 +7746,40 @@ button.report-snapshot-card {
 
 .app-shell--tasks .tasks-table-cell--actions {
   align-items: center;
+  gap: 0.36rem;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.app-shell--tasks .tasks-table-cell--due-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 0;
+}
+
+.app-shell--tasks .tasks-table-cell--due-date span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell--tasks .tasks-table-cell--actions .icon-button svg {
+  width: 1.08rem;
+  height: 1.08rem;
 }
 
 .app-shell--tasks .tasks-row-focus-button {
   display: inline-flex;
-  min-width: 4.58rem;
-  min-height: 2.1rem;
+  width: 2.42rem;
+  min-width: 2.42rem;
+  height: 2.42rem;
+  min-height: 2.42rem;
+  flex: 0 0 2.42rem;
   align-items: center;
   justify-content: center;
-  gap: 0.34rem;
-  padding: 0.38rem 0.6rem;
+  padding: 0;
   border: 1px solid rgba(123, 140, 255, 0.42);
   border-radius: 999px;
   background:
@@ -7718,8 +7792,8 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-row-focus-button svg {
-  width: 0.92rem;
-  height: 0.92rem;
+  width: 1.08rem;
+  height: 1.08rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -7958,6 +8032,12 @@ button.report-snapshot-card {
 
 .app-shell--focus .focus-panel-card--deadlines .history-stack {
   gap: 0.22rem;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 0.18rem;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .app-shell--focus .focus-due-item {
@@ -8019,6 +8099,14 @@ button.report-snapshot-card {
   --focus-glow-secondary: rgba(255, 192, 95, 0.12);
 }
 
+.focus-shell--interruption,
+.app-shell--focus .focus-shell--interruption {
+  --focus-accent: #ff5d68;
+  --focus-accent-strong: #8fb4ff;
+  --focus-glow: rgba(255, 93, 104, 0.2);
+  --focus-glow-secondary: rgba(143, 180, 255, 0.14);
+}
+
 .focus-action-button--procrastinate {
   border-color: rgba(255, 181, 62, 0.62);
   background: linear-gradient(135deg, #ffe36b 0%, #ffb23f 48%, #ff8a2f 100%);
@@ -8035,6 +8123,48 @@ button.report-snapshot-card {
 
 .focus-action-button--procrastinate svg {
   color: #4b2800;
+}
+
+.focus-action-button--complete {
+  border-color: rgba(89, 217, 111, 0.62);
+  background: linear-gradient(135deg, #6fe487 0%, #38c96f 52%, #15985b 100%);
+  color: #06190f;
+  box-shadow: 0 12px 24px rgba(48, 204, 111, 0.18);
+}
+
+.focus-shell .focus-action-button--complete,
+.app-shell--focus .focus-action-button--complete {
+  border-color: rgba(89, 217, 111, 0.62);
+  background: linear-gradient(135deg, #6fe487 0%, #38c96f 52%, #15985b 100%);
+  color: #06190f;
+}
+
+.focus-action-button--complete svg {
+  color: #063516;
+}
+
+.focus-action-button--finish {
+  border-color: rgba(89, 217, 111, 0.62);
+  background: linear-gradient(135deg, #6fe487 0%, #38c96f 52%, #15985b 100%);
+  color: #06190f;
+  box-shadow: 0 12px 24px rgba(48, 204, 111, 0.18);
+}
+
+.focus-shell .focus-action-button--finish,
+.app-shell--focus .focus-action-button--finish {
+  border-color: rgba(89, 217, 111, 0.62);
+  background: linear-gradient(135deg, #6fe487 0%, #38c96f 52%, #15985b 100%);
+  color: #06190f;
+}
+
+.focus-action-button--finish svg {
+  color: #063516;
+}
+
+.focus-action-button--interruption {
+  border-color: rgba(255, 111, 124, 0.54);
+  background: linear-gradient(135deg, rgba(71, 31, 46, 0.96), rgba(40, 31, 60, 0.96));
+  color: #ffe9ec;
 }
 
 .app-shell--focus .focus-plan-grid {
@@ -8083,6 +8213,12 @@ button.report-snapshot-card {
   color: #ff6f8f;
 }
 
+.report-graph-legend-item--interruption .report-graph-dot,
+.report-trend-line--interruption,
+.report-trend-point--interruption {
+  color: #ff4f64;
+}
+
 .timer-ring--procrastination .timer-ring-segment.is-filled,
 .app-shell--focus .timer-ring--procrastination .timer-ring-segment.is-filled {
   background: linear-gradient(180deg, #ffc05f, #ff6f8f);
@@ -8091,8 +8227,16 @@ button.report-snapshot-card {
     0 0 4px rgba(255, 192, 95, 0.36);
 }
 
+.timer-ring--interruption .timer-ring-segment.is-filled,
+.app-shell--focus .timer-ring--interruption .timer-ring-segment.is-filled {
+  background: linear-gradient(180deg, #8fb4ff, #ff5d68);
+  box-shadow:
+    0 0 16px rgba(255, 93, 104, 0.34),
+    0 0 4px rgba(143, 180, 255, 0.36);
+}
+
 .app-shell--focus .timer-actions--focus {
-  width: min(100%, 42rem);
+  width: min(100%, 46rem);
   flex-wrap: nowrap;
   gap: 0.46rem;
 }
@@ -8112,8 +8256,36 @@ button.report-snapshot-card {
   flex-basis: 11.4rem;
 }
 
+.app-shell--focus .focus-action-button--compact {
+  min-width: 7.9rem;
+  flex-basis: 8.8rem;
+}
+
 .app-shell--focus .focus-action-button:not(.focus-action-button--primary) {
   min-width: 6.7rem;
+}
+
+.app-shell--focus .focus-action-button.focus-action-button--icon-only {
+  width: 2.76rem;
+  min-width: 2.76rem;
+  height: 2.76rem;
+  min-height: 2.76rem;
+  flex: 0 0 2.76rem;
+  padding: 0;
+}
+
+.app-shell--focus .focus-action-button--interruption {
+  min-width: 10.7rem;
+  flex-basis: 10.9rem;
+  padding-inline: 0.72rem;
+  white-space: nowrap;
+}
+
+.app-shell--focus .focus-action-button--procrastinate {
+  min-width: 8.6rem;
+  flex-basis: 8.8rem;
+  padding-inline: 0.72rem;
+  white-space: nowrap;
 }
 
 .app-shell--focus .focus-action-button svg {
@@ -8133,7 +8305,7 @@ button.report-snapshot-card {
 
 /* Report procrastination metrics */
 .app-shell--report .report-summary-grid {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.42rem;
 }
 
@@ -8281,7 +8453,7 @@ button.report-snapshot-card {
 }
 
 .app-shell--report .report-trends-tab-grid {
-  grid-template-columns: minmax(0, 1.5fr) minmax(21rem, 0.88fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
 }
 

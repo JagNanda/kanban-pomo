@@ -201,6 +201,15 @@ const migrations: DatabaseMigration[] = [
           ended_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS interruption_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          actual_duration_seconds INTEGER NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS archived_completed_tasks (
           id TEXT PRIMARY KEY,
           original_task_id TEXT NOT NULL,
@@ -248,6 +257,15 @@ const migrations: DatabaseMigration[] = [
           ended_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS archived_interruption_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          actual_duration_seconds INTEGER NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS app_settings (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -284,6 +302,8 @@ const migrations: DatabaseMigration[] = [
           ON break_records(started_at);
         CREATE INDEX IF NOT EXISTS idx_procrastination_records_started_at
           ON procrastination_records(started_at);
+        CREATE INDEX IF NOT EXISTS idx_interruption_records_started_at
+          ON interruption_records(started_at);
         CREATE INDEX IF NOT EXISTS idx_archived_completed_tasks_completed_at
           ON archived_completed_tasks(completed_at);
         CREATE INDEX IF NOT EXISTS idx_archived_pomodoro_sessions_started_at
@@ -292,6 +312,38 @@ const migrations: DatabaseMigration[] = [
           ON archived_break_records(started_at);
         CREATE INDEX IF NOT EXISTS idx_archived_procrastination_records_started_at
           ON archived_procrastination_records(started_at);
+        CREATE INDEX IF NOT EXISTS idx_archived_interruption_records_started_at
+          ON archived_interruption_records(started_at);
+      `);
+    }
+  },
+  {
+    version: 4,
+    name: "interruption_records",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS interruption_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          actual_duration_seconds INTEGER NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS archived_interruption_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          actual_duration_seconds INTEGER NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_interruption_records_started_at
+          ON interruption_records(started_at);
+        CREATE INDEX IF NOT EXISTS idx_archived_interruption_records_started_at
+          ON archived_interruption_records(started_at);
       `);
     }
   }
