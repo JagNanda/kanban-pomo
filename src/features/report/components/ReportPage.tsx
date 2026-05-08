@@ -107,7 +107,7 @@ interface ActivityInsight {
   label: string;
   value: string;
   detail: string;
-  tone: "violet" | "blue" | "green";
+  tone: "violet" | "blue" | "green" | "orange" | "red";
 }
 
 interface ProcrastinationReportEntry {
@@ -734,11 +734,11 @@ const countInterruptionRecordsInMonth = (
   month: Date
 ): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
 
-const getCompletedSessionDayKeys = (sessions: PomodoroSession[]): Set<string> => {
+const getFocusSessionDayKeys = (sessions: PomodoroSession[]): Set<string> => {
   const keys = new Set<string>();
 
   sessions.forEach((session) => {
-    if (session.status === "completed") {
+    if (session.phaseType === "work" && session.actualDurationSeconds > 0) {
       keys.add(toLocalDateKey(new Date(session.startedAt)));
     }
   });
@@ -747,9 +747,13 @@ const getCompletedSessionDayKeys = (sessions: PomodoroSession[]): Set<string> =>
 };
 
 const getCurrentStreak = (sessions: PomodoroSession[], referenceDate: Date): number => {
-  const activeDays = getCompletedSessionDayKeys(sessions);
+  const activeDays = getFocusSessionDayKeys(sessions);
   const cursor = startOfDay(referenceDate);
   let streak = 0;
+
+  if (!activeDays.has(toLocalDateKey(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
 
   while (activeDays.has(toLocalDateKey(cursor))) {
     streak += 1;
@@ -760,7 +764,7 @@ const getCurrentStreak = (sessions: PomodoroSession[], referenceDate: Date): num
 };
 
 const getBestStreak = (sessions: PomodoroSession[]): number => {
-  const sortedKeys = Array.from(getCompletedSessionDayKeys(sessions)).sort();
+  const sortedKeys = Array.from(getFocusSessionDayKeys(sessions)).sort();
   let best = 0;
   let current = 0;
   let previousDate: Date | null = null;
@@ -828,7 +832,9 @@ const buildInsights = (
   month: Date,
   trendData: TrendPoint[],
   monthSessions: PomodoroSession[],
-  priorMonthSessions: PomodoroSession[]
+  priorMonthSessions: PomodoroSession[],
+  monthlyProcrastinationEntries: ProcrastinationReportEntry[],
+  monthlyInterruptionEntries: InterruptionReportEntry[]
 ): ActivityInsight[] => {
   const bestPoint = trendData.reduce<TrendPoint | null>(
     (best, point) => (!best || point.focusMinutes > best.focusMinutes ? point : best),
@@ -836,8 +842,15 @@ const buildInsights = (
   );
   const bestActivePoint = bestPoint && bestPoint.focusMinutes > 0 ? bestPoint : null;
   const weekdayTotals = new Map<number, { focusMinutes: number; activeDays: Set<string> }>();
+  const monthShortLabel = month.toLocaleDateString(undefined, { month: "short" });
+  const workMonthSessions = monthSessions.filter(
+    (session) => session.phaseType === "work" && session.actualDurationSeconds > 0
+  );
+  const workPriorMonthSessions = priorMonthSessions.filter(
+    (session) => session.phaseType === "work" && session.actualDurationSeconds > 0
+  );
 
-  monthSessions.forEach((session) => {
+  workMonthSessions.forEach((session) => {
     const date = new Date(session.startedAt);
     const weekday = date.getDay();
     const existing = weekdayTotals.get(weekday) ?? {
@@ -861,8 +874,10 @@ const buildInsights = (
 
     return best;
   }, null);
-  const completedMonthSessions = monthSessions.filter((session) => session.status === "completed");
-  const completedPriorSessions = priorMonthSessions.filter((session) => session.status === "completed");
+  const completedMonthSessions = workMonthSessions.filter((session) => session.status === "completed");
+  const completedPriorSessions = workPriorMonthSessions.filter(
+    (session) => session.status === "completed"
+  );
   const averageSessionMinutes =
     completedMonthSessions.length > 0
       ? Math.round(
@@ -880,6 +895,39 @@ const buildInsights = (
         )
       : 0;
   const averageDelta = averageSessionMinutes - priorAverageSessionMinutes;
+  const totalFocusMinutes = trendData.reduce((sum, point) => sum + point.focusMinutes, 0);
+  const totalProcrastinationMinutes = trendData.reduce(
+    (sum, point) => sum + point.procrastinationMinutes,
+    0
+  );
+  const totalInterruptionMinutes = trendData.reduce(
+    (sum, point) => sum + point.interruptionMinutes,
+    0
+  );
+  const totalDistractionMinutes = totalProcrastinationMinutes + totalInterruptionMinutes;
+  const trackedMinutes = totalFocusMinutes + totalDistractionMinutes;
+  const distractionShare =
+    trackedMinutes > 0 ? Math.round((totalDistractionMinutes / trackedMinutes) * 100) : 0;
+  const procrastinationDays = trendData.filter((point) => point.procrastinationMinutes > 0).length;
+  const interruptionDays = trendData.filter((point) => point.interruptionMinutes > 0).length;
+  const peakProcrastinationPoint = trendData.reduce<TrendPoint | null>(
+    (peak, point) =>
+      !peak || point.procrastinationMinutes > peak.procrastinationMinutes ? point : peak,
+    null
+  );
+  const peakInterruptionPoint = trendData.reduce<TrendPoint | null>(
+    (peak, point) =>
+      !peak || point.interruptionMinutes > peak.interruptionMinutes ? point : peak,
+    null
+  );
+  const topProcrastinationPoint =
+    peakProcrastinationPoint && peakProcrastinationPoint.procrastinationMinutes > 0
+      ? peakProcrastinationPoint
+      : null;
+  const topInterruptionPoint =
+    peakInterruptionPoint && peakInterruptionPoint.interruptionMinutes > 0
+      ? peakInterruptionPoint
+      : null;
 
   return [
     {
@@ -887,7 +935,7 @@ const buildInsights = (
       icon: "rate",
       label: "Best focus day",
       value: bestActivePoint
-        ? `${month.toLocaleDateString(undefined, { month: "short" })} ${bestActivePoint.day}`
+        ? `${monthShortLabel} ${bestActivePoint.day}`
         : "No activity",
       detail: bestActivePoint
         ? `${formatMinutesDuration(bestActivePoint.focusMinutes)} focus time - ${bestActivePoint.pomodoros} pomodoros`
@@ -916,6 +964,61 @@ const buildInsights = (
           ? "Flat vs last month"
           : `${Math.abs(averageDelta)} min ${averageDelta > 0 ? "longer" : "shorter"} vs last month`,
       tone: "green"
+    },
+    {
+      id: "procrastination-load",
+      icon: "procrastination",
+      label: "Procrastination load",
+      value: formatMinutesDuration(totalProcrastinationMinutes),
+      detail:
+        monthlyProcrastinationEntries.length > 0
+          ? `${monthlyProcrastinationEntries.length} entries across ${procrastinationDays} days`
+          : "No procrastination logged",
+      tone: "orange"
+    },
+    {
+      id: "peak-procrastination-insight",
+      icon: "procrastination",
+      label: "Peak procrastination",
+      value: topProcrastinationPoint ? `${monthShortLabel} ${topProcrastinationPoint.day}` : "None",
+      detail: topProcrastinationPoint
+        ? formatMinutesDuration(topProcrastinationPoint.procrastinationMinutes)
+        : "No spike this month",
+      tone: "orange"
+    },
+    {
+      id: "interruption-load",
+      icon: "interruption",
+      label: "Interruption load",
+      value: formatMinutesDuration(totalInterruptionMinutes),
+      detail:
+        monthlyInterruptionEntries.length > 0
+          ? `${monthlyInterruptionEntries.length} entries across ${interruptionDays} days`
+          : "No interruptions logged",
+      tone: "red"
+    },
+    {
+      id: "peak-interruption-insight",
+      icon: "interruption",
+      label: "Peak interruptions",
+      value: topInterruptionPoint ? `${monthShortLabel} ${topInterruptionPoint.day}` : "None",
+      detail: topInterruptionPoint
+        ? formatMinutesDuration(topInterruptionPoint.interruptionMinutes)
+        : "No spike this month",
+      tone: "red"
+    },
+    {
+      id: "distraction-mix",
+      icon: "warning",
+      label: "Distraction mix",
+      value: `${distractionShare}%`,
+      detail:
+        trackedMinutes > 0
+          ? `${formatMinutesDuration(totalProcrastinationMinutes)} procrastination / ${formatMinutesDuration(
+              totalInterruptionMinutes
+            )} interruptions`
+          : "Track focus to compare patterns",
+      tone: "blue"
     }
   ];
 };
@@ -1213,7 +1316,7 @@ export const ReportPage = ({
       id: "streak",
       icon: "flame",
       tone: "cyan",
-      label: "Streak",
+      label: "Focus streak",
       value: `${currentStreak}`,
       detail: `Best: ${bestStreak} days`,
       delta: formatCountDelta(currentStreak, priorStreak, "days"),
@@ -1403,7 +1506,21 @@ export const ReportPage = ({
     1,
     ...trendData.map((point) => point.procrastinationMinutes)
   );
-  const insights = buildInsights(visibleMonth, trendData, monthSessions, priorMonthSessions);
+  const interruptionMinutesByDay = new Map(
+    trendData.map((point) => [point.key, point.interruptionMinutes])
+  );
+  const maxInterruptionMinutes = Math.max(
+    1,
+    ...trendData.map((point) => point.interruptionMinutes)
+  );
+  const insights = buildInsights(
+    visibleMonth,
+    trendData,
+    monthSessions,
+    priorMonthSessions,
+    monthlyProcrastinationEntries,
+    monthlyInterruptionEntries
+  );
   const totalHealth = Math.max(monthlyTaskSummary.taskCount, 1);
   const onTimePercent = Math.round((monthlyTaskSummary.completedOnTimeCount / totalHealth) * 100);
   const openOverduePercent = Math.round((monthlyTaskSummary.openOverdueCount / totalHealth) * 100);
@@ -1845,7 +1962,10 @@ export const ReportPage = ({
               {monthlyInterruptionEntries.length > 0 ? (
                 <div className="report-procrastination-list">
                   {monthlyInterruptionEntries.map((entry) => (
-                    <article className="report-procrastination-entry" key={entry.id}>
+                    <article
+                      className="report-procrastination-entry report-interruption-entry"
+                      key={entry.id}
+                    >
                       <div className="report-procrastination-entry-time">
                         <strong>{formatMetricDuration(entry.durationSeconds)}</strong>
                         <span>
@@ -1956,7 +2076,7 @@ export const ReportPage = ({
                 <div className="report-section-header">
                   <div>
                     <h2>Activity Calendar</h2>
-                    <p>Daily intensity for focus and procrastination.</p>
+                    <p>Daily intensity for focus, procrastination, and interruptions.</p>
                   </div>
                 </div>
                 <div className="report-activity-month">
@@ -1992,6 +2112,7 @@ export const ReportPage = ({
                       <span className="report-activity-legend-swatches" aria-hidden="true">
                         <i className="report-activity-legend-dot report-activity-legend-dot--focus" />
                         <i className="report-activity-legend-dot report-activity-legend-dot--procrastination" />
+                        <i className="report-activity-legend-dot report-activity-legend-dot--interruption" />
                       </span>
                       {label}
                     </span>
@@ -2070,6 +2191,48 @@ export const ReportPage = ({
                             >
                               {day.isCurrentMonth && procrastinationMinutes > 0 ? (
                                 <strong>{procrastinationMinutes}m</strong>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="report-activity-calendar-block">
+                    <span className="report-activity-calendar-title">Interruptions</span>
+                    <div className="report-month-activity-calendar report-month-activity-calendar--interruption">
+                      <div className="report-month-activity-weekdays">
+                        {weekdayLabels.map((weekday) => (
+                          <span key={weekday}>{weekday[0]}</span>
+                        ))}
+                      </div>
+                      <div className="report-month-activity-grid">
+                        {calendarWeeks.flat().map((day) => {
+                          const interruptionMinutes = interruptionMinutesByDay.get(day.key) ?? 0;
+                          const intensity = day.isCurrentMonth
+                            ? getProcrastinationIntensity(
+                                interruptionMinutes,
+                                maxInterruptionMinutes
+                              )
+                            : "outside";
+
+                          return (
+                            <button
+                              aria-label={`${day.date.toLocaleDateString()} interruption activity`}
+                              className={[
+                                "report-month-activity-day",
+                                "report-month-activity-day--interruption",
+                                `intensity-${intensity}`,
+                                day.isToday ? "is-today" : ""
+                              ].join(" ")}
+                              disabled={!day.isCurrentMonth}
+                              key={day.key}
+                              onClick={() => setSelectedCalendarDay(day)}
+                              type="button"
+                            >
+                              {day.isCurrentMonth && interruptionMinutes > 0 ? (
+                                <strong>{interruptionMinutes}m</strong>
                               ) : null}
                             </button>
                           );
