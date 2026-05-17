@@ -287,6 +287,7 @@ export const App = (): JSX.Element => {
               taskProjects={boardState.state.taskProjects}
               taskCollections={boardState.state.taskCollections}
               tasks={boardState.state.tasks}
+              pomodoroSessions={boardState.state.pomodoroSessions}
               selectedTaskId={boardState.state.selectedTaskId}
               fieldDefinitions={boardState.state.fieldDefinitions}
               taskFieldAssignments={boardState.state.taskFieldAssignments}
@@ -338,6 +339,7 @@ export const App = (): JSX.Element => {
               onStopProcrastinating={pomodoro.actions.stopProcrastinating}
               onStartInterruption={pomodoro.actions.startInterruption}
               onStopInterruption={pomodoro.actions.stopInterruption}
+              onCancelInterruption={pomodoro.actions.cancelInterruption}
               onReset={pomodoro.actions.reset}
             />
           ) : (

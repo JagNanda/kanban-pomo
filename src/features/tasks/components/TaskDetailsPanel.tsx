@@ -15,6 +15,8 @@ import type {
   TaskProjectId
 } from "../domain/task-project.types";
 import type { Task, TaskId, TaskPriority } from "../domain/task.types";
+import type { PomodoroSession } from "../../pomodoro/domain/pomodoro.types";
+import { formatDurationSummary } from "../../../shared/lib/time";
 import { StopwatchIcons } from "./StopwatchIcons";
 
 interface TaskDetailsPanelProps {
@@ -24,6 +26,7 @@ interface TaskDetailsPanelProps {
   taskCollections: TaskCollection[];
   fieldDefinitions: FieldDefinition[];
   fieldValues: TaskFieldValue[];
+  sessionHistory: PomodoroSession[];
   onUpdateTitle: (taskId: TaskId, title: string) => void;
   onUpdateDescription: (taskId: TaskId, description: string) => void;
   onUpdateTaskProject: (taskId: TaskId, taskProjectId: TaskProjectId | null) => void;
@@ -33,6 +36,21 @@ interface TaskDetailsPanelProps {
   onUpdateEstimatedDate: (taskId: TaskId, estimatedCompletionDate: string) => void;
   onUpdateEstimatedPomodoros: (taskId: TaskId, estimatedPomodoros: number) => void;
   onUpdateCompletedPomodoros: (taskId: TaskId, pomodoroCount: number) => void;
+  onUpdateStudyMetadata: (
+    taskId: TaskId,
+    updates: Partial<
+      Pick<
+        Task,
+        | "isStudyProblem"
+        | "studyPlatform"
+        | "studyUrl"
+        | "studyDifficulty"
+        | "studyTopic"
+        | "studyStatus"
+        | "timesCompleted"
+      >
+    >
+  ) => void;
   onUpdateFieldValue: (
     taskId: TaskId,
     fieldDefinitionId: FieldDefinition["id"],
@@ -54,6 +72,7 @@ export const TaskDetailsPanel = ({
   taskCollections,
   fieldDefinitions,
   fieldValues,
+  sessionHistory,
   onUpdateTitle,
   onUpdateDescription,
   onUpdateTaskProject,
@@ -63,6 +82,7 @@ export const TaskDetailsPanel = ({
   onUpdateEstimatedDate,
   onUpdateEstimatedPomodoros,
   onUpdateCompletedPomodoros,
+  onUpdateStudyMetadata,
   onUpdateFieldValue,
   onDeleteTask
 }: TaskDetailsPanelProps): JSX.Element => {
@@ -97,6 +117,11 @@ export const TaskDetailsPanel = ({
   const availableProjects = taskProjects.filter((project) =>
     taskCollections.some((collection) => collection.taskProjectId === project.id)
   );
+  const sortedSessionHistory = sessionHistory
+    .slice()
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  const recentStudySessions = sortedSessionHistory.slice(0, 3);
+  const lastStudiedAt = sortedSessionHistory[0]?.startedAt ?? null;
 
   return (
     <section className="panel-card panel-stack">
@@ -289,6 +314,185 @@ export const TaskDetailsPanel = ({
             <StopwatchIcons count={task.pomodoroCount} tone="completed" />
           </div>
         </div>
+
+        <section className="study-problem-card">
+          <div className="study-problem-header">
+            <div>
+              <strong>Study problem</strong>
+              <span className="subtle">
+                Track coding-practice metadata without leaving the task workflow.
+              </span>
+            </div>
+            <label className="study-problem-toggle">
+              <input
+                checked={task.isStudyProblem}
+                onChange={(event) =>
+                  onUpdateStudyMetadata(task.id, {
+                    isStudyProblem: event.target.checked
+                  })
+                }
+                type="checkbox"
+              />
+              <span>{task.isStudyProblem ? "Enabled" : "Off"}</span>
+            </label>
+          </div>
+
+          <div className="focus-stat-grid study-problem-summary">
+            <div className="focus-stat-card">
+              <span>Tracked time</span>
+              <strong>{formatDurationSummary(task.actualTrackedSeconds)}</strong>
+            </div>
+            <div className="focus-stat-card">
+              <span>Last studied</span>
+              <strong>
+                {lastStudiedAt
+                  ? new Date(lastStudiedAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric"
+                    })
+                  : "Not yet"}
+              </strong>
+            </div>
+          </div>
+
+          {task.isStudyProblem ? (
+            <>
+              <div className="sub-grid">
+                <label className="label-stack">
+                  <span>Platform</span>
+                  <input
+                    placeholder="LeetCode"
+                    value={task.studyPlatform}
+                    onChange={(event) =>
+                      onUpdateStudyMetadata(task.id, {
+                        studyPlatform: event.target.value
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="label-stack">
+                  <span>Difficulty</span>
+                  <select
+                    value={task.studyDifficulty ?? ""}
+                    onChange={(event) =>
+                      onUpdateStudyMetadata(task.id, {
+                        studyDifficulty:
+                          event.target.value === ""
+                            ? null
+                            : (event.target.value as Task["studyDifficulty"])
+                      })
+                    }
+                  >
+                    <option value="">Unspecified</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="sub-grid">
+                <label className="label-stack">
+                  <span>Status</span>
+                  <select
+                    value={task.studyStatus}
+                    onChange={(event) =>
+                      onUpdateStudyMetadata(task.id, {
+                        studyStatus: event.target.value as Task["studyStatus"]
+                      })
+                    }
+                  >
+                    <option value="unstarted">Unstarted</option>
+                    <option value="attempted">Attempted</option>
+                    <option value="solved">Solved</option>
+                    <option value="reviewing">Reviewing</option>
+                  </select>
+                </label>
+
+                <label className="label-stack">
+                  <span>Times completed</span>
+                  <input
+                    min={0}
+                    placeholder="0"
+                    type="number"
+                    value={task.timesCompleted === 0 ? "" : String(task.timesCompleted)}
+                    onChange={(event) =>
+                      onUpdateStudyMetadata(task.id, {
+                        timesCompleted:
+                          event.target.value === "" ? 0 : Number(event.target.value)
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <label className="label-stack">
+                <span>Topic</span>
+                <input
+                  placeholder="Graphs, DP, Two pointers..."
+                  value={task.studyTopic}
+                  onChange={(event) =>
+                    onUpdateStudyMetadata(task.id, {
+                      studyTopic: event.target.value
+                    })
+                  }
+                />
+              </label>
+
+              <label className="label-stack">
+                <span>Problem URL</span>
+                <input
+                  placeholder="https://leetcode.com/problems/..."
+                  type="url"
+                  value={task.studyUrl}
+                  onChange={(event) =>
+                    onUpdateStudyMetadata(task.id, {
+                      studyUrl: event.target.value
+                    })
+                  }
+                />
+              </label>
+
+              {task.studyUrl ? (
+                <a
+                  className="study-problem-link"
+                  href={task.studyUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Open problem
+                </a>
+              ) : null}
+
+              <div className="field-list-header">
+                <strong>Recent study sessions</strong>
+                <span className="subtle">{sessionHistory.length} total</span>
+              </div>
+
+              <div className="history-stack study-problem-history">
+                {recentStudySessions.length > 0 ? (
+                  recentStudySessions.map((session) => (
+                    <div className="history-item" key={session.id}>
+                      <strong>{formatDurationSummary(session.actualDurationSeconds)}</strong>
+                      <span>
+                        {new Date(session.startedAt).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit"
+                        })}{" "}
+                        · {session.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No study sessions recorded yet.</div>
+                )}
+              </div>
+            </>
+          ) : null}
+        </section>
 
         <div className="field-list-header">
           <strong>Custom fields</strong>

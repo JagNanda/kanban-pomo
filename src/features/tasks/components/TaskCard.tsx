@@ -1,5 +1,6 @@
 import type { TaskCollection } from "../domain/task-collection.types";
 import type { Task, TaskId } from "../domain/task.types";
+import { formatDurationSummary } from "../../../shared/lib/time";
 import { CollectionBadge } from "./CollectionBadge";
 import { OverdueIndicator } from "./OverdueIndicator";
 import { StopwatchIcons } from "./StopwatchIcons";
@@ -16,7 +17,7 @@ interface TaskCardProps {
 const TaskCardIcon = ({
   name
 }: {
-  name: "edit" | "delete" | "calendar" | "estimated" | "completed" | "play";
+  name: "edit" | "delete" | "calendar" | "estimated" | "completed" | "tracked" | "play";
 }): JSX.Element => {
   switch (name) {
     case "edit":
@@ -62,6 +63,15 @@ const TaskCardIcon = ({
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8" />
           <path d="m8.6 12.4 2.2 2.2 4.8-5.2" />
+        </svg>
+      );
+    case "tracked":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M9 2h6" />
+          <path d="M12 2v3" />
+          <circle cx="12" cy="13" r="7" />
+          <path d="M12 9v5l3 2" />
         </svg>
       );
     case "play":
@@ -159,6 +169,16 @@ export const TaskCard = ({
               Completed
             </span>
             <StopwatchIcons count={task.pomodoroCount} size="sm" tone="completed" />
+          </div>
+
+          <div className="task-field-row">
+            <span className="task-field-label">
+              <TaskCardIcon name="tracked" />
+              {task.isStudyProblem ? "Studied" : "Tracked"}
+            </span>
+            <span className="task-field-value">
+              {formatDurationSummary(task.actualTrackedSeconds)}
+            </span>
           </div>
         </div>
       </div>

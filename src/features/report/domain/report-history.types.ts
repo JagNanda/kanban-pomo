@@ -1,5 +1,10 @@
 import type { Brand } from "../../../shared/domain/brand";
-import type { TaskId, TaskPriority } from "../../tasks/domain/task.types";
+import type {
+  StudyProblemDifficulty,
+  StudyProblemStatus,
+  TaskId,
+  TaskPriority
+} from "../../tasks/domain/task.types";
 
 export type ArchivedCompletedTaskId = Brand<string, "ArchivedCompletedTaskId">;
 
@@ -16,5 +21,12 @@ export interface ArchivedCompletedTask {
   projectColor: string | null;
   pomodoroCount: number;
   actualTrackedSeconds: number;
+  isStudyProblem: boolean;
+  studyPlatform: string;
+  studyUrl: string;
+  studyDifficulty: StudyProblemDifficulty | null;
+  studyTopic: string;
+  studyStatus: StudyProblemStatus;
+  timesCompleted: number;
   deletedAt: string;
 }

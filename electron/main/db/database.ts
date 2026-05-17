@@ -35,11 +35,13 @@ const insertColumn = `
 const insertTask = `
   INSERT INTO tasks (
     id, board_id, column_id, task_project_id, task_collection_id, title, description, priority, order_index, estimated_completion_date,
-    estimated_pomodoros, actual_tracked_seconds, pomodoro_count, completed_at, created_at, updated_at
+    estimated_pomodoros, actual_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
+    study_topic, study_status, times_completed, completed_at, created_at, updated_at
   )
   VALUES (
     @id, @board_id, @column_id, @task_project_id, @task_collection_id, @title, @description, @priority, @order_index, @estimated_completion_date,
-    @estimated_pomodoros, @actual_tracked_seconds, @pomodoro_count, @completed_at, @created_at, @updated_at
+    @estimated_pomodoros, @actual_tracked_seconds, @pomodoro_count, @is_study_problem, @study_platform, @study_url, @study_difficulty,
+    @study_topic, @study_status, @times_completed, @completed_at, @created_at, @updated_at
   )
 `;
 
@@ -116,12 +118,14 @@ const insertArchivedCompletedTask = `
   INSERT INTO archived_completed_tasks (
     id, original_task_id, title, priority, estimated_completion_date, completed_at,
     collection_name, collection_color, project_name, project_color, pomodoro_count,
-    actual_tracked_seconds, deleted_at
+    actual_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
+    study_topic, study_status, times_completed, deleted_at
   )
   VALUES (
     @id, @original_task_id, @title, @priority, @estimated_completion_date, @completed_at,
     @collection_name, @collection_color, @project_name, @project_color, @pomodoro_count,
-    @actual_tracked_seconds, @deleted_at
+    @actual_tracked_seconds, @is_study_problem, @study_platform, @study_url, @study_difficulty,
+    @study_topic, @study_status, @times_completed, @deleted_at
   )
 `;
 
@@ -244,7 +248,8 @@ export class AppDatabase {
     const tasks = this.db
       .prepare(
         `SELECT id, board_id, column_id, task_project_id, task_collection_id, title, description, priority, order_index, estimated_completion_date,
-                estimated_pomodoros, actual_tracked_seconds, pomodoro_count, completed_at, created_at, updated_at
+                estimated_pomodoros, actual_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
+                study_topic, study_status, times_completed, completed_at, created_at, updated_at
          FROM tasks
          ORDER BY column_id ASC, order_index ASC`
       )
@@ -262,6 +267,13 @@ export class AppDatabase {
       estimated_pomodoros: number;
       actual_tracked_seconds: number;
       pomodoro_count: number;
+      is_study_problem: number;
+      study_platform: string;
+      study_url: string;
+      study_difficulty: "easy" | "medium" | "hard" | null;
+      study_topic: string;
+      study_status: "unstarted" | "attempted" | "solved" | "reviewing";
+      times_completed: number;
       completed_at: string | null;
       created_at: string;
       updated_at: string;
@@ -370,7 +382,8 @@ export class AppDatabase {
       .prepare(
         `SELECT id, original_task_id, title, priority, estimated_completion_date, completed_at,
                 collection_name, collection_color, project_name, project_color, pomodoro_count,
-                actual_tracked_seconds, deleted_at
+                actual_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
+                study_topic, study_status, times_completed, deleted_at
          FROM archived_completed_tasks
          ORDER BY completed_at DESC, deleted_at DESC`
       )
@@ -387,6 +400,13 @@ export class AppDatabase {
       project_color: string | null;
       pomodoro_count: number;
       actual_tracked_seconds: number;
+      is_study_problem: number;
+      study_platform: string;
+      study_url: string;
+      study_difficulty: "easy" | "medium" | "hard" | null;
+      study_topic: string;
+      study_status: "unstarted" | "attempted" | "solved" | "reviewing";
+      times_completed: number;
       deleted_at: string;
     }>;
     const archivedPomodoroSessions = this.db
@@ -501,6 +521,14 @@ export class AppDatabase {
         estimatedPomodoros: row.estimated_pomodoros as number,
         actualTrackedSeconds: row.actual_tracked_seconds as number,
         pomodoroCount: row.pomodoro_count as number,
+        isStudyProblem: Boolean(row.is_study_problem),
+        studyPlatform: row.study_platform as string,
+        studyUrl: row.study_url as string,
+        studyDifficulty:
+          row.study_difficulty as BoardSnapshot["tasks"][number]["studyDifficulty"],
+        studyTopic: row.study_topic as string,
+        studyStatus: row.study_status as BoardSnapshot["tasks"][number]["studyStatus"],
+        timesCompleted: row.times_completed as number,
         completedAt:
           (row.completed_at as string | null) ??
           (completedColumnIds.has(row.column_id) ? (row.updated_at as string) : null),
@@ -609,6 +637,13 @@ export class AppDatabase {
         projectColor: row.project_color,
         pomodoroCount: row.pomodoro_count,
         actualTrackedSeconds: row.actual_tracked_seconds,
+        isStudyProblem: Boolean(row.is_study_problem),
+        studyPlatform: row.study_platform,
+        studyUrl: row.study_url,
+        studyDifficulty: row.study_difficulty,
+        studyTopic: row.study_topic,
+        studyStatus: row.study_status,
+        timesCompleted: row.times_completed,
         deletedAt: row.deleted_at
       })),
       archivedPomodoroSessions: archivedPomodoroSessions.map((row) => ({
@@ -737,6 +772,13 @@ export class AppDatabase {
           estimated_pomodoros: task.estimatedPomodoros,
           actual_tracked_seconds: task.actualTrackedSeconds,
           pomodoro_count: task.pomodoroCount,
+          is_study_problem: Number(task.isStudyProblem),
+          study_platform: task.studyPlatform,
+          study_url: task.studyUrl,
+          study_difficulty: task.studyDifficulty,
+          study_topic: task.studyTopic,
+          study_status: task.studyStatus,
+          times_completed: task.timesCompleted,
           completed_at: task.completedAt,
           created_at: task.createdAt,
           updated_at: task.updatedAt
@@ -847,6 +889,13 @@ export class AppDatabase {
           project_color: task.projectColor,
           pomodoro_count: task.pomodoroCount,
           actual_tracked_seconds: task.actualTrackedSeconds,
+          is_study_problem: Number(task.isStudyProblem),
+          study_platform: task.studyPlatform,
+          study_url: task.studyUrl,
+          study_difficulty: task.studyDifficulty,
+          study_topic: task.studyTopic,
+          study_status: task.studyStatus,
+          times_completed: task.timesCompleted,
           deleted_at: task.deletedAt
         });
       });

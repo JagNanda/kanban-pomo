@@ -9,7 +9,7 @@ import type {
 import { TaskDetailsPanel } from "../../tasks/components/TaskDetailsPanel";
 import type { TaskCollectionId } from "../../tasks/domain/task-collection.types";
 import type { TaskProjectId } from "../../tasks/domain/task-project.types";
-import type { TaskId, TaskPriority } from "../../tasks/domain/task.types";
+import type { Task, TaskId, TaskPriority } from "../../tasks/domain/task.types";
 import { ColumnLane } from "./ColumnLane";
 import type {
   BoardViewState,
@@ -37,6 +37,21 @@ interface BoardScreenProps {
     updateTaskEstimatedDate: (taskId: TaskId, estimatedCompletionDate: string) => void;
     updateTaskEstimatedPomodoros: (taskId: TaskId, estimatedPomodoros: number) => void;
     updateTaskCompletedPomodoros: (taskId: TaskId, pomodoroCount: number) => void;
+    updateTaskStudyMetadata: (
+      taskId: TaskId,
+      updates: Partial<
+        Pick<
+          Task,
+          | "isStudyProblem"
+          | "studyPlatform"
+          | "studyUrl"
+          | "studyDifficulty"
+          | "studyTopic"
+          | "studyStatus"
+          | "timesCompleted"
+        >
+      >
+    ) => void;
     deleteTask: (taskId: TaskId) => void;
     addFieldDefinition: (
       taskId: TaskId | null,
@@ -65,6 +80,13 @@ interface CreateTaskDraft {
   taskCollectionId: TaskCollectionId | "";
   estimatedCompletionDate: string;
   estimatedPomodoros: string;
+  isStudyProblem: boolean;
+  studyPlatform: string;
+  studyUrl: string;
+  studyDifficulty: Task["studyDifficulty"];
+  studyTopic: string;
+  studyStatus: Task["studyStatus"];
+  timesCompleted: string;
 }
 
 interface EditColumnDraft {
@@ -131,7 +153,14 @@ const createDefaultTaskDraft = (columnId: ColumnId | ""): CreateTaskDraft => ({
   taskProjectId: "",
   taskCollectionId: "",
   estimatedCompletionDate: "",
-  estimatedPomodoros: ""
+  estimatedPomodoros: "",
+  isStudyProblem: false,
+  studyPlatform: "",
+  studyUrl: "",
+  studyDifficulty: null,
+  studyTopic: "",
+  studyStatus: "unstarted",
+  timesCompleted: ""
 });
 
 const TodayStatIcon = ({ kind }: { kind: TodayStatKind }): JSX.Element => {
@@ -394,7 +423,15 @@ export const BoardScreen = ({
       estimatedPomodoros:
         draft.estimatedPomodoros.trim() === ""
           ? 0
-          : Number(draft.estimatedPomodoros)
+          : Number(draft.estimatedPomodoros),
+      isStudyProblem: draft.isStudyProblem,
+      studyPlatform: draft.studyPlatform,
+      studyUrl: draft.studyUrl,
+      studyDifficulty: draft.studyDifficulty,
+      studyTopic: draft.studyTopic,
+      studyStatus: draft.studyStatus,
+      timesCompleted:
+        draft.timesCompleted.trim() === "" ? 0 : Number(draft.timesCompleted)
     });
     closeModal();
   };
@@ -753,6 +790,136 @@ export const BoardScreen = ({
                       }
                     />
                   </label>
+
+                  <section className="study-problem-card">
+                    <div className="study-problem-header">
+                      <div>
+                        <strong>Study problem</strong>
+                        <span className="subtle">
+                          Mark this as a coding-practice problem while creating it.
+                        </span>
+                      </div>
+                      <label className="study-problem-toggle">
+                        <input
+                          checked={draft.isStudyProblem}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              isStudyProblem: event.target.checked
+                            }))
+                          }
+                          type="checkbox"
+                        />
+                        <span>{draft.isStudyProblem ? "Enabled" : "Off"}</span>
+                      </label>
+                    </div>
+
+                    {draft.isStudyProblem ? (
+                      <>
+                        <div className="sub-grid">
+                          <label className="label-stack">
+                            <span>Platform</span>
+                            <input
+                              placeholder="LeetCode"
+                              value={draft.studyPlatform}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyPlatform: event.target.value
+                                }))
+                              }
+                            />
+                          </label>
+
+                          <label className="label-stack">
+                            <span>Difficulty</span>
+                            <select
+                              value={draft.studyDifficulty ?? ""}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyDifficulty:
+                                    event.target.value === ""
+                                      ? null
+                                      : (event.target.value as Task["studyDifficulty"])
+                                }))
+                              }
+                            >
+                              <option value="">Unspecified</option>
+                              <option value="easy">Easy</option>
+                              <option value="medium">Medium</option>
+                              <option value="hard">Hard</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="sub-grid">
+                          <label className="label-stack">
+                            <span>Status</span>
+                            <select
+                              value={draft.studyStatus}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyStatus: event.target.value as Task["studyStatus"]
+                                }))
+                              }
+                            >
+                              <option value="unstarted">Unstarted</option>
+                              <option value="attempted">Attempted</option>
+                              <option value="solved">Solved</option>
+                              <option value="reviewing">Reviewing</option>
+                            </select>
+                          </label>
+
+                          <label className="label-stack">
+                            <span>Times completed</span>
+                            <input
+                              min={0}
+                              placeholder="0"
+                              type="number"
+                              value={draft.timesCompleted}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  timesCompleted: event.target.value
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <label className="label-stack">
+                          <span>Topic</span>
+                          <input
+                            placeholder="Graphs, DP, Two pointers..."
+                            value={draft.studyTopic}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                studyTopic: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+
+                        <label className="label-stack">
+                          <span>Problem URL</span>
+                          <input
+                            placeholder="https://leetcode.com/problems/..."
+                            type="url"
+                            value={draft.studyUrl}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                studyUrl: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                  </section>
                 </div>
 
                 <div className="modal-footer">
@@ -951,6 +1118,9 @@ export const BoardScreen = ({
                 taskCollections={state.taskCollections}
                 fieldDefinitions={selectedTaskFieldDefinitions}
                 fieldValues={selectedTaskFieldValues}
+                sessionHistory={state.pomodoroSessions.filter(
+                  (session) => session.taskId === selectedTask.id
+                )}
                 onUpdateTitle={actions.updateTaskTitle}
                 onUpdateDescription={actions.updateTaskDescription}
                 onUpdateTaskProject={actions.assignTaskToProject}
@@ -960,6 +1130,7 @@ export const BoardScreen = ({
                 onUpdateEstimatedDate={actions.updateTaskEstimatedDate}
                 onUpdateEstimatedPomodoros={actions.updateTaskEstimatedPomodoros}
                 onUpdateCompletedPomodoros={actions.updateTaskCompletedPomodoros}
+                onUpdateStudyMetadata={actions.updateTaskStudyMetadata}
                 onUpdateFieldValue={actions.updateTaskFieldValue}
                 onDeleteTask={() => handleDeleteTaskById(selectedTask.id)}
               />

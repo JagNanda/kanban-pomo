@@ -8,6 +8,7 @@ import type {
   TaskFieldValue
 } from "../../custom-fields/domain/custom-fields.types";
 import type { CreateTaskInput } from "../../board/application/useBoardState";
+import type { PomodoroSession } from "../../pomodoro/domain/pomodoro.types";
 import { CalendarInput } from "../../../shared/components/CalendarInput";
 import {
   MARKDOWN_IMPORT_TEMPLATE,
@@ -97,6 +98,13 @@ interface CreateTaskDraft {
   taskCollectionId: TaskCollectionId | "";
   estimatedCompletionDate: string;
   estimatedPomodoros: string;
+  isStudyProblem: boolean;
+  studyPlatform: string;
+  studyUrl: string;
+  studyDifficulty: Task["studyDifficulty"];
+  studyTopic: string;
+  studyStatus: Task["studyStatus"];
+  timesCompleted: string;
 }
 
 type DueDateShiftTarget =
@@ -108,6 +116,7 @@ interface TasksPageProps {
   taskProjects: TaskProject[];
   taskCollections: TaskCollection[];
   tasks: Task[];
+  pomodoroSessions: PomodoroSession[];
   selectedTaskId: TaskId | null;
   fieldDefinitions: FieldDefinition[];
   taskFieldAssignments: TaskFieldAssignment[];
@@ -138,6 +147,21 @@ interface TasksPageProps {
     updateTaskEstimatedDate: (taskId: TaskId, estimatedCompletionDate: string) => void;
     updateTaskEstimatedPomodoros: (taskId: TaskId, estimatedPomodoros: number) => void;
     updateTaskCompletedPomodoros: (taskId: TaskId, pomodoroCount: number) => void;
+    updateTaskStudyMetadata: (
+      taskId: TaskId,
+      updates: Partial<
+        Pick<
+          Task,
+          | "isStudyProblem"
+          | "studyPlatform"
+          | "studyUrl"
+          | "studyDifficulty"
+          | "studyTopic"
+          | "studyStatus"
+          | "timesCompleted"
+        >
+      >
+    ) => void;
     updateTaskFieldValue: (
       taskId: TaskId,
       fieldDefinitionId: FieldDefinition["id"],
@@ -177,7 +201,14 @@ const createDefaultTaskDraft = (columnId: ColumnId | ""): CreateTaskDraft => ({
   taskProjectId: "",
   taskCollectionId: "",
   estimatedCompletionDate: "",
-  estimatedPomodoros: ""
+  estimatedPomodoros: "",
+  isStudyProblem: false,
+  studyPlatform: "",
+  studyUrl: "",
+  studyDifficulty: null,
+  studyTopic: "",
+  studyStatus: "unstarted",
+  timesCompleted: ""
 });
 
 const toLocalDateKey = (value: Date): string => {
@@ -393,6 +424,7 @@ export const TasksPage = ({
   taskProjects,
   taskCollections,
   tasks,
+  pomodoroSessions,
   selectedTaskId,
   fieldDefinitions,
   taskFieldAssignments,
@@ -939,7 +971,15 @@ export const TasksPage = ({
       taskCollectionId: draft.taskCollectionId,
       estimatedCompletionDate: draft.estimatedCompletionDate || null,
       estimatedPomodoros:
-        draft.estimatedPomodoros.trim() === "" ? 0 : Number(draft.estimatedPomodoros)
+        draft.estimatedPomodoros.trim() === "" ? 0 : Number(draft.estimatedPomodoros),
+      isStudyProblem: draft.isStudyProblem,
+      studyPlatform: draft.studyPlatform,
+      studyUrl: draft.studyUrl,
+      studyDifficulty: draft.studyDifficulty,
+      studyTopic: draft.studyTopic,
+      studyStatus: draft.studyStatus,
+      timesCompleted:
+        draft.timesCompleted.trim() === "" ? 0 : Number(draft.timesCompleted)
     });
     setModalState(null);
   };
@@ -2293,6 +2333,150 @@ export const TasksPage = ({
                       }
                     />
                   </label>
+
+                  <section className="study-problem-card">
+                    <div className="study-problem-header">
+                      <div>
+                        <strong>Study problem</strong>
+                        <span className="subtle">
+                          Mark this as a coding-practice problem while creating it.
+                        </span>
+                      </div>
+                      <label className="study-problem-toggle">
+                        <input
+                          checked={draft.isStudyProblem}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              isStudyProblem: event.target.checked
+                            }))
+                          }
+                          type="checkbox"
+                        />
+                        <span>{draft.isStudyProblem ? "Enabled" : "Off"}</span>
+                      </label>
+                    </div>
+
+                    {draft.isStudyProblem ? (
+                      <>
+                        <div className="sub-grid">
+                          <label className="label-stack">
+                            <span>Platform</span>
+                            <input
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              placeholder="LeetCode"
+                              value={draft.studyPlatform}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyPlatform: event.target.value
+                                }))
+                              }
+                            />
+                          </label>
+
+                          <label className="label-stack">
+                            <span>Difficulty</span>
+                            <select
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              value={draft.studyDifficulty ?? ""}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyDifficulty:
+                                    event.target.value === ""
+                                      ? null
+                                      : (event.target.value as Task["studyDifficulty"])
+                                }))
+                              }
+                            >
+                              <option value="">Unspecified</option>
+                              <option value="easy">Easy</option>
+                              <option value="medium">Medium</option>
+                              <option value="hard">Hard</option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="sub-grid">
+                          <label className="label-stack">
+                            <span>Status</span>
+                            <select
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              value={draft.studyStatus}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  studyStatus: event.target.value as Task["studyStatus"]
+                                }))
+                              }
+                            >
+                              <option value="unstarted">Unstarted</option>
+                              <option value="attempted">Attempted</option>
+                              <option value="solved">Solved</option>
+                              <option value="reviewing">Reviewing</option>
+                            </select>
+                          </label>
+
+                          <label className="label-stack">
+                            <span>Times completed</span>
+                            <input
+                              min={0}
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              placeholder="0"
+                              type="number"
+                              value={draft.timesCompleted}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  timesCompleted: event.target.value
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <label className="label-stack">
+                          <span>Topic</span>
+                          <input
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            placeholder="Graphs, DP, Two pointers..."
+                            value={draft.studyTopic}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                studyTopic: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+
+                        <label className="label-stack">
+                          <span>Problem URL</span>
+                          <input
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            placeholder="https://leetcode.com/problems/..."
+                            type="url"
+                            value={draft.studyUrl}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                studyUrl: event.target.value
+                              }))
+                            }
+                          />
+                        </label>
+                      </>
+                    ) : null}
+                  </section>
                 </div>
 
                 <div className="modal-footer">
@@ -2485,6 +2669,9 @@ export const TasksPage = ({
                 taskCollections={taskCollections}
                 fieldDefinitions={selectedTaskFieldDefinitions}
                 fieldValues={selectedTaskFieldValues}
+                sessionHistory={pomodoroSessions.filter(
+                  (session) => session.taskId === selectedTask.id
+                )}
                 onUpdateTitle={actions.updateTaskTitle}
                 onUpdateDescription={actions.updateTaskDescription}
                 onUpdateTaskProject={actions.assignTaskToProject}
@@ -2494,6 +2681,7 @@ export const TasksPage = ({
                 onUpdateEstimatedDate={actions.updateTaskEstimatedDate}
                 onUpdateEstimatedPomodoros={actions.updateTaskEstimatedPomodoros}
                 onUpdateCompletedPomodoros={actions.updateTaskCompletedPomodoros}
+                onUpdateStudyMetadata={actions.updateTaskStudyMetadata}
                 onUpdateFieldValue={actions.updateTaskFieldValue}
                 onDeleteTask={() => handleDeleteTask(selectedTask.id)}
               />

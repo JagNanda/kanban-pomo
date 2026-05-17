@@ -7,8 +7,7 @@ import {
   getTaskDueDate,
   getTaskOverdueDays,
   isTaskCompletedOnTime,
-  isTaskOverdue,
-  isTaskScheduledInMonth
+  isTaskOverdue
 } from "../../tasks/domain/task-deadline";
 import type { Task, TaskId, TaskPriority } from "../../tasks/domain/task.types";
 import type {
@@ -48,6 +47,23 @@ type ReportIconName =
   | "interruption"
   | "external";
 type MetricDirection = "up" | "down" | "neutral";
+type ReportRangeMode =
+  | "month"
+  | "quarter"
+  | "year-to-date"
+  | "year"
+  | "custom";
+type TrendGranularity = "day" | "month";
+
+interface DateRange {
+  start: Date;
+  endExclusive: Date;
+}
+
+interface ReportLogFilter {
+  range: DateRange;
+  label: string;
+}
 
 interface SummaryCardMetric {
   id: string;
@@ -70,9 +86,20 @@ interface CalendarDayData {
   completedTasks: ReportTaskItem[];
 }
 
-interface TrendPoint {
-  day: number;
+interface CalendarMonthData {
   key: string;
+  month: Date;
+  days: CalendarDayData[];
+  weeks: CalendarDayData[][];
+}
+
+interface TrendPoint {
+  index: number;
+  key: string;
+  label: string;
+  tooltipLabel: string;
+  start: Date;
+  endExclusive: Date;
   focusMinutes: number;
   breakMinutes: number;
   procrastinationMinutes: number;
@@ -99,6 +126,24 @@ interface ReportTaskItem {
   completedAt: string | null;
   collectionColor: string | null;
   isArchived: boolean;
+}
+
+interface StudyProblemReportItem {
+  id: string;
+  taskId: TaskId;
+  title: string;
+  platform: string;
+  difficulty: Task["studyDifficulty"];
+  topic: string;
+  status: Task["studyStatus"];
+  timesCompleted: number;
+  totalTrackedSeconds: number;
+  isArchived: boolean;
+}
+
+interface StudyProblemRangeItem extends StudyProblemReportItem {
+  rangeTrackedSeconds: number;
+  sessionCount: number;
 }
 
 interface ActivityInsight {
@@ -252,11 +297,95 @@ const startOfMonth = (value: Date): Date => new Date(value.getFullYear(), value.
 const addMonths = (value: Date, delta: number): Date =>
   new Date(value.getFullYear(), value.getMonth() + delta, 1);
 
+const startOfYear = (value: Date): Date => new Date(value.getFullYear(), 0, 1);
+
+const addYears = (value: Date, delta: number): Date =>
+  new Date(value.getFullYear() + delta, value.getMonth(), 1);
+
+const shiftDateByYears = (value: Date, delta: number): Date =>
+  new Date(value.getFullYear() + delta, value.getMonth(), value.getDate());
+
+const addDays = (value: Date, delta: number): Date => {
+  const nextDate = new Date(value);
+  nextDate.setDate(nextDate.getDate() + delta);
+
+  return nextDate;
+};
+
+const startOfQuarter = (value: Date): Date => {
+  const quarterStartMonth = Math.floor(value.getMonth() / 3) * 3;
+
+  return new Date(value.getFullYear(), quarterStartMonth, 1);
+};
+
 const getDaysInMonth = (value: Date): number =>
   new Date(value.getFullYear(), value.getMonth() + 1, 0).getDate();
 
 const getMonthEndExclusive = (value: Date): Date =>
   new Date(value.getFullYear(), value.getMonth() + 1, 1);
+
+const getYearEndExclusive = (value: Date): Date => new Date(value.getFullYear() + 1, 0, 1);
+
+const getQuarterEndExclusive = (value: Date): Date => addMonths(startOfQuarter(value), 3);
+
+const getYearToDateEndExclusive = (anchor: Date, referenceDate: Date): Date =>
+  addDays(
+    startOfDay(new Date(anchor.getFullYear(), referenceDate.getMonth(), referenceDate.getDate())),
+    1
+  );
+
+const minDate = (left: Date, right: Date): Date =>
+  new Date(Math.min(left.getTime(), right.getTime()));
+
+const maxDate = (left: Date, right: Date): Date =>
+  new Date(Math.max(left.getTime(), right.getTime()));
+
+const getRangeDayCount = (range: DateRange): number =>
+  Math.max(1, Math.round((range.endExclusive.getTime() - range.start.getTime()) / 86400000));
+
+const getPriorRange = (range: DateRange, mode: ReportRangeMode): DateRange => {
+  if (mode === "month") {
+    const start = addMonths(range.start, -1);
+
+    return {
+      start,
+      endExclusive: getMonthEndExclusive(start)
+    };
+  }
+
+  if (mode === "quarter") {
+    const start = addMonths(range.start, -3);
+
+    return {
+      start,
+      endExclusive: getQuarterEndExclusive(start)
+    };
+  }
+
+  if (mode === "year") {
+    const start = startOfYear(addYears(range.start, -1));
+
+    return {
+      start,
+      endExclusive: getYearEndExclusive(start)
+    };
+  }
+
+  if (mode === "year-to-date") {
+    return {
+      start: shiftDateByYears(range.start, -1),
+      endExclusive: shiftDateByYears(range.endExclusive, -1)
+    };
+  }
+
+  const dayCount = getRangeDayCount(range);
+  const endExclusive = new Date(range.start);
+
+  return {
+    start: addDays(range.start, -dayCount),
+    endExclusive
+  };
+};
 
 const formatMetricDuration = (seconds: number): string => {
   const totalMinutes = Math.round(seconds / 60);
@@ -285,6 +414,57 @@ const formatMonthLabel = (value: Date): string =>
     year: "numeric"
   });
 
+const formatDateLabel = (value: Date): string =>
+  value.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+
+const formatRangeLabel = (range: DateRange, mode: ReportRangeMode): string => {
+  if (mode === "month") {
+    return formatMonthLabel(range.start);
+  }
+
+  if (mode === "year") {
+    return String(range.start.getFullYear());
+  }
+
+  if (mode === "quarter") {
+    return `Q${Math.floor(range.start.getMonth() / 3) + 1} ${range.start.getFullYear()}`;
+  }
+
+  if (mode === "year-to-date") {
+    return `${range.start.getFullYear()} YTD`;
+  }
+
+  const endInclusive = addDays(range.endExclusive, -1);
+
+  if (toLocalDateKey(range.start) === toLocalDateKey(endInclusive)) {
+    return formatDateLabel(range.start);
+  }
+
+  return `${formatDateLabel(range.start)} - ${formatDateLabel(endInclusive)}`;
+};
+
+const formatDateInputValue = (value: Date): string => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+const dateFromInputValue = (value: string): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const toLocalDateKey = (value: Date): string => {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -301,11 +481,14 @@ const dateKeyFromIso = (value: string | null): string | null => {
   return toLocalDateKey(new Date(value));
 };
 
-const isInMonth = (value: string, month: Date): boolean => {
+const isInDateRange = (value: string, range: DateRange): boolean => {
   const date = new Date(value);
 
-  return date >= startOfMonth(month) && date < getMonthEndExclusive(month);
+  return date >= range.start && date < range.endExclusive;
 };
+
+const isDateInRange = (value: Date, range: DateRange): boolean =>
+  value >= range.start && value < range.endExclusive;
 
 const getPercentDelta = (current: number, previous: number): number => {
   if (previous === 0) {
@@ -329,34 +512,47 @@ const getDeltaDirection = (
   return movedUp === !isLowerBetter ? "up" : "down";
 };
 
-const formatPercentDelta = (current: number, previous: number): string => {
+const formatPercentDelta = (
+  current: number,
+  previous: number,
+  comparisonLabel = "previous period"
+): string => {
   const delta = Math.abs(getPercentDelta(current, previous));
 
   if (delta === 0) {
-    return "No change from last month";
+    return `No change from ${comparisonLabel}`;
   }
 
-  return `${current > previous ? "Up" : "Down"} ${delta}% from last month`;
+  return `${current > previous ? "Up" : "Down"} ${delta}% from ${comparisonLabel}`;
 };
 
-const formatCountDelta = (current: number, previous: number, unit: string): string => {
+const formatCountDelta = (
+  current: number,
+  previous: number,
+  unit: string,
+  comparisonLabel = "previous period"
+): string => {
   const delta = Math.abs(current - previous);
 
   if (delta === 0) {
-    return "No change from last month";
+    return `No change from ${comparisonLabel}`;
   }
 
-  return `${current > previous ? "Up" : "Down"} ${delta} ${unit} from last month`;
+  return `${current > previous ? "Up" : "Down"} ${delta} ${unit} from ${comparisonLabel}`;
 };
 
-const formatDurationDelta = (current: number, previous: number): string => {
+const formatDurationDelta = (
+  current: number,
+  previous: number,
+  comparisonLabel = "previous period"
+): string => {
   const delta = Math.abs(current - previous);
 
   if (delta === 0) {
-    return "No change from last month";
+    return `No change from ${comparisonLabel}`;
   }
 
-  return `${current > previous ? "Up" : "Down"} ${formatMetricDuration(delta)} from last month`;
+  return `${current > previous ? "Up" : "Down"} ${formatMetricDuration(delta)} from ${comparisonLabel}`;
 };
 
 const compareTasks = (left: ReportTaskItem, right: ReportTaskItem): number => {
@@ -482,41 +678,97 @@ const groupCalendarWeeks = (calendarDays: CalendarDayData[]): CalendarDayData[][
     calendarDays.slice(index * 7, index * 7 + 7)
   );
 
-const getMonthTrendData = (
-  month: Date,
+const getCalendarMonthsInRange = (
+  range: DateRange,
+  activeTasks: ReportTaskItem[],
+  completedTasks: ReportTaskItem[],
+  pomodoroSessions: PomodoroSession[]
+): CalendarMonthData[] => {
+  const months: CalendarMonthData[] = [];
+  const endMonth = startOfMonth(addDays(range.endExclusive, -1));
+  let cursor = startOfMonth(range.start);
+
+  while (cursor <= endMonth) {
+    const month = new Date(cursor);
+    const days = getCalendarDays(month, activeTasks, completedTasks, pomodoroSessions);
+
+    months.push({
+      key: `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`,
+      month,
+      days,
+      weeks: groupCalendarWeeks(days)
+    });
+
+    cursor = addMonths(cursor, 1);
+  }
+
+  return months;
+};
+
+const getTrendGranularity = (range: DateRange): TrendGranularity =>
+  getRangeDayCount(range) > 92 ? "month" : "day";
+
+const getTrendBucketKey = (value: Date, granularity: TrendGranularity): string =>
+  granularity === "month"
+    ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`
+    : toLocalDateKey(value);
+
+const getRangeTrendData = (
+  range: DateRange,
   pomodoroSessions: PomodoroSession[],
   breakRecords: BreakRecord[],
   procrastinationRecords: ProcrastinationRecord[],
   interruptionRecords: InterruptionRecord[]
 ): TrendPoint[] => {
-  const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
-  const totalsByDay = new Map<number, TrendPoint>();
+  const granularity = getTrendGranularity(range);
+  const totalsByKey = new Map<string, TrendPoint>();
+  const cursor =
+    granularity === "month" ? startOfMonth(range.start) : startOfDay(range.start);
+  let index = 0;
 
-  Array.from({ length: getDaysInMonth(month) }, (_, index) => {
-    const day = index + 1;
-    const date = new Date(month.getFullYear(), month.getMonth(), day);
-    totalsByDay.set(day, {
-      day,
-      key: toLocalDateKey(date),
+  while (cursor < range.endExclusive) {
+    const bucketStart = new Date(cursor);
+    const bucketEnd =
+      granularity === "month" ? getMonthEndExclusive(bucketStart) : addDays(bucketStart, 1);
+    const key = getTrendBucketKey(cursor, granularity);
+    totalsByKey.set(key, {
+      index,
+      key,
+      label:
+        granularity === "month"
+          ? cursor.toLocaleDateString(undefined, { month: "short" })
+          : String(cursor.getDate()),
+      tooltipLabel:
+        granularity === "month"
+          ? cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+          : cursor.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+      start: maxDate(bucketStart, range.start),
+      endExclusive: minDate(bucketEnd, range.endExclusive),
       focusMinutes: 0,
       breakMinutes: 0,
       procrastinationMinutes: 0,
       interruptionMinutes: 0,
       pomodoros: 0
     });
-  });
 
-  pomodoroSessions.forEach((session) => {
-    const sessionDate = new Date(session.startedAt);
-    const sessionKey = `${sessionDate.getFullYear()}-${String(
-      sessionDate.getMonth() + 1
-    ).padStart(2, "0")}`;
+    index += 1;
+    if (granularity === "month") {
+      cursor.setMonth(cursor.getMonth() + 1, 1);
+    } else {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
 
-    if (sessionKey !== monthKey) {
-      return;
+  const getPoint = (startedAt: string): TrendPoint | null => {
+    if (!isInDateRange(startedAt, range)) {
+      return null;
     }
 
-    const point = totalsByDay.get(sessionDate.getDate());
+    return totalsByKey.get(getTrendBucketKey(new Date(startedAt), granularity)) ?? null;
+  };
+
+  pomodoroSessions.forEach((session) => {
+    const point = getPoint(session.startedAt);
 
     if (!point) {
       return;
@@ -530,17 +782,7 @@ const getMonthTrendData = (
   });
 
   breakRecords.forEach((record) => {
-    const breakDate = new Date(record.startedAt);
-    const breakKey = `${breakDate.getFullYear()}-${String(breakDate.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}`;
-
-    if (breakKey !== monthKey) {
-      return;
-    }
-
-    const point = totalsByDay.get(breakDate.getDate());
+    const point = getPoint(record.startedAt);
 
     if (!point) {
       return;
@@ -550,16 +792,7 @@ const getMonthTrendData = (
   });
 
   procrastinationRecords.forEach((record) => {
-    const procrastinationDate = new Date(record.startedAt);
-    const procrastinationKey = `${procrastinationDate.getFullYear()}-${String(
-      procrastinationDate.getMonth() + 1
-    ).padStart(2, "0")}`;
-
-    if (procrastinationKey !== monthKey) {
-      return;
-    }
-
-    const point = totalsByDay.get(procrastinationDate.getDate());
+    const point = getPoint(record.startedAt);
 
     if (!point) {
       return;
@@ -571,16 +804,7 @@ const getMonthTrendData = (
   });
 
   interruptionRecords.forEach((record) => {
-    const interruptionDate = new Date(record.startedAt);
-    const interruptionKey = `${interruptionDate.getFullYear()}-${String(
-      interruptionDate.getMonth() + 1
-    ).padStart(2, "0")}`;
-
-    if (interruptionKey !== monthKey) {
-      return;
-    }
-
-    const point = totalsByDay.get(interruptionDate.getDate());
+    const point = getPoint(record.startedAt);
 
     if (!point) {
       return;
@@ -591,7 +815,7 @@ const getMonthTrendData = (
     );
   });
 
-  return Array.from(totalsByDay.values());
+  return Array.from(totalsByKey.values());
 };
 
 const buildLinePath = (
@@ -639,9 +863,15 @@ const mergeUniqueTasks = (...taskGroups: ReportTaskItem[][]): ReportTaskItem[] =
   return Array.from(mergedTasks.values());
 };
 
-const wasTaskLateDuringMonth = (
+const isTaskScheduledInRange = (task: ReportTaskItem, range: DateRange): boolean => {
+  const dueDate = getTaskDueDate(task);
+
+  return dueDate !== null && dueDate >= range.start && dueDate < range.endExclusive;
+};
+
+const wasTaskLateDuringRange = (
   task: ReportTaskItem,
-  month: Date,
+  range: DateRange,
   referenceDate: Date
 ): boolean => {
   const dueDate = getTaskDueDate(task);
@@ -650,39 +880,36 @@ const wasTaskLateDuringMonth = (
     return false;
   }
 
-  const monthStart = startOfMonth(month);
-  const monthEnd = getMonthEndExclusive(month);
-
-  if (dueDate >= monthEnd) {
+  if (dueDate >= range.endExclusive) {
     return false;
   }
 
   const completionDate = getTaskCompletionDate(task);
 
   if (completionDate) {
-    return completionDate > dueDate && completionDate >= monthStart;
+    return completionDate > dueDate && completionDate >= range.start;
   }
 
-  return referenceDate >= monthStart && referenceDate > dueDate;
+  return referenceDate >= range.start && referenceDate > dueDate;
 };
 
-const buildMonthlyTaskSummary = (
+const buildTaskSummaryForRange = (
   tasks: ReportTaskItem[],
-  month: Date,
+  range: DateRange,
   referenceDate: Date
 ): MonthlyTaskSummary => {
-  const monthTasks = tasks.filter((task) => isTaskScheduledInMonth(task, month));
-  const lateTasksInMonth = tasks.filter((task) => wasTaskLateDuringMonth(task, month, referenceDate));
-  const openOverdueTasks = lateTasksInMonth.filter((task) => task.completedAt === null);
-  const completedLateTasks = lateTasksInMonth.filter((task) => task.completedAt !== null);
-  const reportableTasks = mergeUniqueTasks(monthTasks, openOverdueTasks, completedLateTasks);
+  const rangeTasks = tasks.filter((task) => isTaskScheduledInRange(task, range));
+  const lateTasksInRange = tasks.filter((task) => wasTaskLateDuringRange(task, range, referenceDate));
+  const openOverdueTasks = lateTasksInRange.filter((task) => task.completedAt === null);
+  const completedLateTasks = lateTasksInRange.filter((task) => task.completedAt !== null);
+  const reportableTasks = mergeUniqueTasks(rangeTasks, openOverdueTasks, completedLateTasks);
   const completedTasks = reportableTasks.filter((task) => task.completedAt !== null);
 
   return {
     taskCount: reportableTasks.length,
     completedCount: completedTasks.length,
     completedOnTimeCount: completedTasks.filter((task) => isTaskCompletedOnTime(task)).length,
-    overdueDaysTotal: lateTasksInMonth.reduce(
+    overdueDaysTotal: lateTasksInRange.reduce(
       (sum, task) => sum + getTaskOverdueDays(task, referenceDate),
       0
     ),
@@ -692,47 +919,142 @@ const buildMonthlyTaskSummary = (
   };
 };
 
-const countCompletedTasksInMonth = (tasks: ReportTaskItem[], month: Date): number =>
-  tasks.filter((task) => task.completedAt !== null && isInMonth(task.completedAt, month)).length;
+const buildStudyProblemItems = (
+  tasks: Task[],
+  archivedCompletedTasks: ArchivedCompletedTask[]
+): StudyProblemReportItem[] => [
+  ...tasks
+    .filter((task) => task.isStudyProblem)
+    .map((task) => ({
+      id: task.id,
+      taskId: task.id,
+      title: task.title,
+      platform: task.studyPlatform,
+      difficulty: task.studyDifficulty,
+      topic: task.studyTopic,
+      status: task.studyStatus,
+      timesCompleted: task.timesCompleted,
+      totalTrackedSeconds: task.actualTrackedSeconds,
+      isArchived: false
+    })),
+  ...archivedCompletedTasks
+    .filter((task) => task.isStudyProblem)
+    .map((task) => ({
+      id: task.id,
+      taskId: task.originalTaskId,
+      title: task.title,
+      platform: task.studyPlatform,
+      difficulty: task.studyDifficulty,
+      topic: task.studyTopic,
+      status: task.studyStatus,
+      timesCompleted: task.timesCompleted,
+      totalTrackedSeconds: task.actualTrackedSeconds,
+      isArchived: true
+    }))
+];
 
-const sumFocusSecondsInMonth = (sessions: PomodoroSession[], month: Date): number =>
+const buildStudyProblemRangeItems = (
+  studyProblems: StudyProblemReportItem[],
+  pomodoroSessions: PomodoroSession[],
+  range: DateRange
+): StudyProblemRangeItem[] => {
+  const sessionTotalsByTaskId = new Map<TaskId, { seconds: number; sessions: number }>();
+
+  pomodoroSessions
+    .filter((session) => isInDateRange(session.startedAt, range))
+    .forEach((session) => {
+      const current = sessionTotalsByTaskId.get(session.taskId) ?? {
+        seconds: 0,
+        sessions: 0
+      };
+
+      sessionTotalsByTaskId.set(session.taskId, {
+        seconds: current.seconds + session.actualDurationSeconds,
+        sessions: current.sessions + 1
+      });
+    });
+
+  return studyProblems
+    .map((problem) => {
+      const rangeTotals = sessionTotalsByTaskId.get(problem.taskId) ?? {
+        seconds: 0,
+        sessions: 0
+      };
+
+      return {
+        ...problem,
+        rangeTrackedSeconds: rangeTotals.seconds,
+        sessionCount: rangeTotals.sessions
+      };
+    })
+    .sort((left, right) => {
+      if (left.rangeTrackedSeconds !== right.rangeTrackedSeconds) {
+        return right.rangeTrackedSeconds - left.rangeTrackedSeconds;
+      }
+
+      return left.title.localeCompare(right.title);
+    });
+};
+
+const countCompletedTasksInRange = (tasks: ReportTaskItem[], range: DateRange): number =>
+  tasks.filter((task) => task.completedAt !== null && isInDateRange(task.completedAt, range)).length;
+
+const sumFocusSecondsInRange = (sessions: PomodoroSession[], range: DateRange): number =>
   sessions
-    .filter((session) => isInMonth(session.startedAt, month))
+    .filter((session) => isInDateRange(session.startedAt, range))
     .reduce((sum, session) => sum + session.actualDurationSeconds, 0);
 
-const countCompletedPomodorosInMonth = (sessions: PomodoroSession[], month: Date): number =>
-  sessions.filter((session) => session.status === "completed" && isInMonth(session.startedAt, month)).length;
+const countCompletedPomodorosInRange = (sessions: PomodoroSession[], range: DateRange): number =>
+  sessions.filter((session) => session.status === "completed" && isInDateRange(session.startedAt, range)).length;
 
-const sumBreakSecondsInMonth = (records: BreakRecord[], month: Date): number =>
+const sumBreakSecondsInRange = (records: BreakRecord[], range: DateRange): number =>
   records
-    .filter((record) => isInMonth(record.startedAt, month))
+    .filter((record) => isInDateRange(record.startedAt, range))
     .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
 
-const sumProcrastinationSecondsInMonth = (
+const sumProcrastinationSecondsInRange = (
   records: ProcrastinationRecord[],
-  month: Date
+  range: DateRange
 ): number =>
   records
-    .filter((record) => isInMonth(record.startedAt, month))
+    .filter((record) => isInDateRange(record.startedAt, range))
     .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
 
-const sumInterruptionSecondsInMonth = (
+const sumInterruptionSecondsInRange = (
   records: InterruptionRecord[],
-  month: Date
+  range: DateRange
 ): number =>
   records
-    .filter((record) => isInMonth(record.startedAt, month))
+    .filter((record) => isInDateRange(record.startedAt, range))
     .reduce((sum, record) => sum + record.actualDurationSeconds, 0);
 
-const countProcrastinationRecordsInMonth = (
+const countProcrastinationRecordsInRange = (
   records: ProcrastinationRecord[],
-  month: Date
-): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
+  range: DateRange
+): number => records.filter((record) => isInDateRange(record.startedAt, range)).length;
 
-const countInterruptionRecordsInMonth = (
+const countInterruptionRecordsInRange = (
   records: InterruptionRecord[],
-  month: Date
-): number => records.filter((record) => isInMonth(record.startedAt, month)).length;
+  range: DateRange
+): number => records.filter((record) => isInDateRange(record.startedAt, range)).length;
+
+const sumRecordsByDay = (
+  records: Array<ProcrastinationRecord | InterruptionRecord>,
+  range: DateRange
+): Map<string, number> => {
+  const totals = new Map<string, number>();
+
+  records.forEach((record) => {
+    if (!isInDateRange(record.startedAt, range)) {
+      return;
+    }
+
+    const key = toLocalDateKey(new Date(record.startedAt));
+    totals.set(key, (totals.get(key) ?? 0) + Math.round(record.actualDurationSeconds / 60));
+  });
+
+  return totals;
+};
 
 const getFocusSessionDayKeys = (sessions: PomodoroSession[]): Set<string> => {
   const keys = new Set<string>();
@@ -829,12 +1151,12 @@ const getProcrastinationIntensity = (minutes: number, maxMinutes: number): numbe
 };
 
 const buildInsights = (
-  month: Date,
   trendData: TrendPoint[],
   monthSessions: PomodoroSession[],
   priorMonthSessions: PomodoroSession[],
   monthlyProcrastinationEntries: ProcrastinationReportEntry[],
-  monthlyInterruptionEntries: InterruptionReportEntry[]
+  monthlyInterruptionEntries: InterruptionReportEntry[],
+  comparisonLabel: string
 ): ActivityInsight[] => {
   const bestPoint = trendData.reduce<TrendPoint | null>(
     (best, point) => (!best || point.focusMinutes > best.focusMinutes ? point : best),
@@ -842,7 +1164,6 @@ const buildInsights = (
   );
   const bestActivePoint = bestPoint && bestPoint.focusMinutes > 0 ? bestPoint : null;
   const weekdayTotals = new Map<number, { focusMinutes: number; activeDays: Set<string> }>();
-  const monthShortLabel = month.toLocaleDateString(undefined, { month: "short" });
   const workMonthSessions = monthSessions.filter(
     (session) => session.phaseType === "work" && session.actualDurationSeconds > 0
   );
@@ -934,9 +1255,7 @@ const buildInsights = (
       id: "best-day",
       icon: "rate",
       label: "Best focus day",
-      value: bestActivePoint
-        ? `${monthShortLabel} ${bestActivePoint.day}`
-        : "No activity",
+      value: bestActivePoint ? bestActivePoint.tooltipLabel : "No activity",
       detail: bestActivePoint
         ? `${formatMinutesDuration(bestActivePoint.focusMinutes)} focus time - ${bestActivePoint.pomodoros} pomodoros`
         : "Start a session to build history",
@@ -961,8 +1280,8 @@ const buildInsights = (
       value: `${averageSessionMinutes} min`,
       detail:
         averageDelta === 0
-          ? "Flat vs last month"
-          : `${Math.abs(averageDelta)} min ${averageDelta > 0 ? "longer" : "shorter"} vs last month`,
+          ? `Flat vs ${comparisonLabel}`
+          : `${Math.abs(averageDelta)} min ${averageDelta > 0 ? "longer" : "shorter"} vs ${comparisonLabel}`,
       tone: "green"
     },
     {
@@ -980,10 +1299,10 @@ const buildInsights = (
       id: "peak-procrastination-insight",
       icon: "procrastination",
       label: "Peak procrastination",
-      value: topProcrastinationPoint ? `${monthShortLabel} ${topProcrastinationPoint.day}` : "None",
+      value: topProcrastinationPoint ? topProcrastinationPoint.tooltipLabel : "None",
       detail: topProcrastinationPoint
         ? formatMinutesDuration(topProcrastinationPoint.procrastinationMinutes)
-        : "No spike this month",
+        : "No spike in period",
       tone: "orange"
     },
     {
@@ -1001,10 +1320,10 @@ const buildInsights = (
       id: "peak-interruption-insight",
       icon: "interruption",
       label: "Peak interruptions",
-      value: topInterruptionPoint ? `${monthShortLabel} ${topInterruptionPoint.day}` : "None",
+      value: topInterruptionPoint ? topInterruptionPoint.tooltipLabel : "None",
       detail: topInterruptionPoint
         ? formatMinutesDuration(topInterruptionPoint.interruptionMinutes)
-        : "No spike this month",
+        : "No spike in period",
       tone: "red"
     },
     {
@@ -1039,14 +1358,20 @@ export const ReportPage = ({
   onOpenTask
 }: ReportPageProps): JSX.Element => {
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [rangeMode, setRangeMode] = useState<ReportRangeMode>("month");
+  const [customStartValue, setCustomStartValue] = useState<string>(() =>
+    formatDateInputValue(startOfMonth(new Date()))
+  );
+  const [customEndValue, setCustomEndValue] = useState<string>(() =>
+    formatDateInputValue(new Date())
+  );
   const [viewMode, setViewMode] = useState<ReportViewMode>(initialViewMode);
   const [selectedCalendarDay, setSelectedCalendarDay] =
     useState<CalendarDayData | null>(null);
   const [openOverdueDetails, setOpenOverdueDetails] =
     useState<ReportTaskItem[] | null>(null);
-  const [selectedTrendDay, setSelectedTrendDay] = useState<number>(() =>
-    Math.min(14, getDaysInMonth(new Date()))
-  );
+  const [selectedTrendKey, setSelectedTrendKey] = useState<string | null>(null);
+  const [logFilter, setLogFilter] = useState<ReportLogFilter | null>(null);
 
   useEffect(() => {
     setViewMode(initialViewMode);
@@ -1072,6 +1397,10 @@ export const ReportPage = ({
     () => [...interruptionRecords, ...archivedInterruptionRecords],
     [archivedInterruptionRecords, interruptionRecords]
   );
+  const studyProblems = useMemo(
+    () => buildStudyProblemItems(tasks, archivedCompletedTasks),
+    [archivedCompletedTasks, tasks]
+  );
   const taskTitleById = useMemo(
     () =>
       new Map(
@@ -1081,22 +1410,112 @@ export const ReportPage = ({
       ),
     [reportTasks.history]
   );
-  const priorMonth = addMonths(visibleMonth, -1);
   const referenceDate = new Date();
+  const customStartDate = dateFromInputValue(customStartValue) ?? startOfMonth(visibleMonth);
+  const customEndDate = dateFromInputValue(customEndValue) ?? referenceDate;
+  const reportRangeStart =
+    customStartDate <= customEndDate ? customStartDate : customEndDate;
+  const reportRangeEnd =
+    customStartDate <= customEndDate ? customEndDate : customStartDate;
+  const reportRange: DateRange = (() => {
+    if (rangeMode === "year") {
+      return {
+        start: startOfYear(visibleMonth),
+        endExclusive: getYearEndExclusive(visibleMonth)
+      };
+    }
+
+    if (rangeMode === "quarter") {
+      return {
+        start: startOfQuarter(visibleMonth),
+        endExclusive: getQuarterEndExclusive(visibleMonth)
+      };
+    }
+
+    if (rangeMode === "year-to-date") {
+      return {
+        start: startOfYear(visibleMonth),
+        endExclusive: getYearToDateEndExclusive(visibleMonth, referenceDate)
+      };
+    }
+
+    if (rangeMode === "custom") {
+      return {
+        start: startOfDay(reportRangeStart),
+        endExclusive: addDays(startOfDay(reportRangeEnd), 1)
+      };
+    }
+
+    return {
+      start: startOfMonth(visibleMonth),
+      endExclusive: getMonthEndExclusive(visibleMonth)
+    };
+  })();
+  const priorReportRange = getPriorRange(reportRange, rangeMode);
+  const reportRangeLabel = formatRangeLabel(reportRange, rangeMode);
+  const rangeCopy: Record<
+    ReportRangeMode,
+    {
+      comparisonLabel: string;
+      periodNoun: string;
+      periodScopeLabel: string;
+      periodTaskLabel: string;
+    }
+  > = {
+    month: {
+      comparisonLabel: "previous month",
+      periodNoun: "month",
+      periodScopeLabel: "the selected month",
+      periodTaskLabel: "Tasks in selected month"
+    },
+    quarter: {
+      comparisonLabel: "previous quarter",
+      periodNoun: "quarter",
+      periodScopeLabel: "the selected quarter",
+      periodTaskLabel: "Tasks in selected quarter"
+    },
+    "year-to-date": {
+      comparisonLabel: "previous year to date",
+      periodNoun: "year-to-date range",
+      periodScopeLabel: "the selected year-to-date range",
+      periodTaskLabel: "Tasks year to date"
+    },
+    year: {
+      comparisonLabel: "previous year",
+      periodNoun: "year",
+      periodScopeLabel: "the selected year",
+      periodTaskLabel: "Tasks in selected year"
+    },
+    custom: {
+      comparisonLabel: "previous period",
+      periodNoun: "range",
+      periodScopeLabel: "the selected range",
+      periodTaskLabel: "Tasks in range"
+    }
+  };
+  const { comparisonLabel, periodNoun, periodScopeLabel, periodTaskLabel } =
+    rangeCopy[rangeMode];
+  const periodDescriptor = periodScopeLabel;
+
+  useEffect(() => {
+    setSelectedTrendKey(null);
+    setOpenOverdueDetails(null);
+    setLogFilter(null);
+  }, [rangeMode, reportRange.start.getTime(), reportRange.endExclusive.getTime()]);
   const monthlyTaskSummary = useMemo(
-    () => buildMonthlyTaskSummary(reportTasks.history, visibleMonth, referenceDate),
-    [reportTasks.history, visibleMonth]
+    () => buildTaskSummaryForRange(reportTasks.history, reportRange, referenceDate),
+    [reportTasks.history, reportRange.start, reportRange.endExclusive]
   );
   const priorMonthlyTaskSummary = useMemo(
-    () => buildMonthlyTaskSummary(reportTasks.history, priorMonth, referenceDate),
-    [priorMonth, reportTasks.history]
+    () => buildTaskSummaryForRange(reportTasks.history, priorReportRange, referenceDate),
+    [priorReportRange.start, priorReportRange.endExclusive, reportTasks.history]
   );
   const openOverdueTasks = useMemo(
     () =>
       reportTasks.history
         .filter(
           (task) =>
-            task.completedAt === null && wasTaskLateDuringMonth(task, visibleMonth, referenceDate)
+            task.completedAt === null && wasTaskLateDuringRange(task, reportRange, referenceDate)
         )
         .slice()
         .sort((left, right) => {
@@ -1109,23 +1528,37 @@ export const ReportPage = ({
 
           return compareTasks(left, right);
         }),
-    [reportTasks.history, visibleMonth]
+    [reportRange.start, reportRange.endExclusive, reportTasks.history]
   );
-  const calendarDays = useMemo(
+  const activeCalendarTasks = useMemo(
+    () => reportTasks.active.filter((task) => !task.completedAt),
+    [reportTasks.active]
+  );
+  const completedCalendarTasks = useMemo(
+    () => reportTasks.history.filter((task) => task.completedAt !== null),
+    [reportTasks.history]
+  );
+  const reportCalendarMonths = useMemo(
     () =>
-      getCalendarDays(
-        visibleMonth,
-        reportTasks.active.filter((task) => !task.completedAt),
-        reportTasks.history.filter((task) => task.completedAt !== null),
+      getCalendarMonthsInRange(
+        reportRange,
+        activeCalendarTasks,
+        completedCalendarTasks,
         allPomodoroSessions
       ),
-    [allPomodoroSessions, reportTasks.active, reportTasks.history, visibleMonth]
+    [
+      activeCalendarTasks,
+      allPomodoroSessions,
+      completedCalendarTasks,
+      reportRange.start,
+      reportRange.endExclusive
+    ]
   );
-  const calendarWeeks = useMemo(() => groupCalendarWeeks(calendarDays), [calendarDays]);
+  const isRangeCalendarView = reportCalendarMonths.length > 1;
   const trendData = useMemo(
     () =>
-      getMonthTrendData(
-        visibleMonth,
+      getRangeTrendData(
+        reportRange,
         allPomodoroSessions,
         allBreakRecords,
         allProcrastinationRecords,
@@ -1136,13 +1569,14 @@ export const ReportPage = ({
       allInterruptionRecords,
       allPomodoroSessions,
       allProcrastinationRecords,
-      visibleMonth
+      reportRange.start,
+      reportRange.endExclusive
     ]
   );
   const monthlyProcrastinationEntries = useMemo<ProcrastinationReportEntry[]>(
     () =>
       allProcrastinationRecords
-        .filter((record) => isInMonth(record.startedAt, visibleMonth))
+        .filter((record) => isInDateRange(record.startedAt, reportRange))
         .slice()
         .sort(
           (left, right) =>
@@ -1167,12 +1601,12 @@ export const ReportPage = ({
             startedAt: record.startedAt
           };
         }),
-    [allProcrastinationRecords, taskTitleById, visibleMonth]
+    [allProcrastinationRecords, reportRange.start, reportRange.endExclusive, taskTitleById]
   );
   const monthlyInterruptionEntries = useMemo<InterruptionReportEntry[]>(
     () =>
       allInterruptionRecords
-        .filter((record) => isInMonth(record.startedAt, visibleMonth))
+        .filter((record) => isInDateRange(record.startedAt, reportRange))
         .slice()
         .sort(
           (left, right) =>
@@ -1197,21 +1631,37 @@ export const ReportPage = ({
             startedAt: record.startedAt
           };
         }),
-    [allInterruptionRecords, taskTitleById, visibleMonth]
+    [allInterruptionRecords, reportRange.start, reportRange.endExclusive, taskTitleById]
   );
   const monthSessions = useMemo(
-    () => allPomodoroSessions.filter((session) => isInMonth(session.startedAt, visibleMonth)),
-    [allPomodoroSessions, visibleMonth]
+    () => allPomodoroSessions.filter((session) => isInDateRange(session.startedAt, reportRange)),
+    [allPomodoroSessions, reportRange.start, reportRange.endExclusive]
   );
   const priorMonthSessions = useMemo(
-    () => allPomodoroSessions.filter((session) => isInMonth(session.startedAt, priorMonth)),
-    [allPomodoroSessions, priorMonth]
+    () => allPomodoroSessions.filter((session) => isInDateRange(session.startedAt, priorReportRange)),
+    [allPomodoroSessions, priorReportRange.start, priorReportRange.endExclusive]
   );
-  const focusSeconds = sumFocusSecondsInMonth(allPomodoroSessions, visibleMonth);
-  const priorFocusSeconds = sumFocusSecondsInMonth(allPomodoroSessions, priorMonth);
-  const completedPomodoros = countCompletedPomodorosInMonth(allPomodoroSessions, visibleMonth);
-  const completedTasks = countCompletedTasksInMonth(reportTasks.history, visibleMonth);
-  const priorCompletedTasks = countCompletedTasksInMonth(reportTasks.history, priorMonth);
+  const studyProblemRangeItems = useMemo(
+    () => buildStudyProblemRangeItems(studyProblems, allPomodoroSessions, reportRange),
+    [allPomodoroSessions, reportRange.start, reportRange.endExclusive, studyProblems]
+  );
+  const studiedProblemsInRange = studyProblemRangeItems.filter(
+    (problem) => problem.rangeTrackedSeconds > 0
+  );
+  const studySecondsInRange = studiedProblemsInRange.reduce(
+    (sum, problem) => sum + problem.rangeTrackedSeconds,
+    0
+  );
+  const totalStudyCompletions = studyProblems.reduce(
+    (sum, problem) => sum + problem.timesCompleted,
+    0
+  );
+  const topStudyProblems = studiedProblemsInRange.slice(0, 5);
+  const focusSeconds = sumFocusSecondsInRange(allPomodoroSessions, reportRange);
+  const priorFocusSeconds = sumFocusSecondsInRange(allPomodoroSessions, priorReportRange);
+  const completedPomodoros = countCompletedPomodorosInRange(allPomodoroSessions, reportRange);
+  const completedTasks = countCompletedTasksInRange(reportTasks.history, reportRange);
+  const priorCompletedTasks = countCompletedTasksInRange(reportTasks.history, priorReportRange);
   const completionRate =
     monthlyTaskSummary.taskCount > 0
       ? Math.round((monthlyTaskSummary.completedCount / monthlyTaskSummary.taskCount) * 100)
@@ -1222,35 +1672,38 @@ export const ReportPage = ({
           (priorMonthlyTaskSummary.completedCount / priorMonthlyTaskSummary.taskCount) * 100
         )
       : 0;
-  const breakSeconds = sumBreakSecondsInMonth(allBreakRecords, visibleMonth);
-  const priorBreakSeconds = sumBreakSecondsInMonth(allBreakRecords, priorMonth);
-  const procrastinationSeconds = sumProcrastinationSecondsInMonth(
+  const breakSeconds = sumBreakSecondsInRange(allBreakRecords, reportRange);
+  const priorBreakSeconds = sumBreakSecondsInRange(allBreakRecords, priorReportRange);
+  const procrastinationSeconds = sumProcrastinationSecondsInRange(
     allProcrastinationRecords,
-    visibleMonth
+    reportRange
   );
-  const priorProcrastinationSeconds = sumProcrastinationSecondsInMonth(
+  const priorProcrastinationSeconds = sumProcrastinationSecondsInRange(
     allProcrastinationRecords,
-    priorMonth
+    priorReportRange
   );
-  const interruptionSeconds = sumInterruptionSecondsInMonth(
+  const interruptionSeconds = sumInterruptionSecondsInRange(
     allInterruptionRecords,
-    visibleMonth
+    reportRange
   );
-  const priorInterruptionSeconds = sumInterruptionSecondsInMonth(
+  const priorInterruptionSeconds = sumInterruptionSecondsInRange(
     allInterruptionRecords,
-    priorMonth
+    priorReportRange
   );
-  const procrastinationEntries = countProcrastinationRecordsInMonth(
+  const procrastinationEntries = countProcrastinationRecordsInRange(
     allProcrastinationRecords,
-    visibleMonth
+    reportRange
   );
-  const interruptionEntries = countInterruptionRecordsInMonth(
+  const interruptionEntries = countInterruptionRecordsInRange(
     allInterruptionRecords,
-    visibleMonth
+    reportRange
   );
   const currentStreak = getCurrentStreak(allPomodoroSessions, referenceDate);
   const bestStreak = getBestStreak(allPomodoroSessions);
-  const priorStreak = getCurrentStreak(allPomodoroSessions, addMonths(referenceDate, -1));
+  const priorStreak = getCurrentStreak(
+    allPomodoroSessions,
+    addDays(priorReportRange.endExclusive, -1)
+  );
   const summaryCards: SummaryCardMetric[] = [
     {
       id: "focus-time",
@@ -1259,7 +1712,7 @@ export const ReportPage = ({
       label: "Focus time",
       value: formatMetricDuration(focusSeconds),
       detail: `${completedPomodoros} pomodoros`,
-      delta: formatPercentDelta(focusSeconds, priorFocusSeconds),
+      delta: formatPercentDelta(focusSeconds, priorFocusSeconds, comparisonLabel),
       direction: getDeltaDirection(focusSeconds, priorFocusSeconds)
     },
     {
@@ -1269,7 +1722,7 @@ export const ReportPage = ({
       label: "Tasks completed",
       value: String(completedTasks),
       detail: `${completionRate}% complete`,
-      delta: formatPercentDelta(completedTasks, priorCompletedTasks),
+      delta: formatPercentDelta(completedTasks, priorCompletedTasks, comparisonLabel),
       direction: getDeltaDirection(completedTasks, priorCompletedTasks)
     },
     {
@@ -1279,7 +1732,7 @@ export const ReportPage = ({
       label: "Completion rate",
       value: `${completionRate}%`,
       detail: `${monthlyTaskSummary.completedCount} of ${monthlyTaskSummary.taskCount} tasks done`,
-      delta: formatCountDelta(completionRate, priorCompletionRate, "pts"),
+      delta: formatCountDelta(completionRate, priorCompletionRate, "pts", comparisonLabel),
       direction: getDeltaDirection(completionRate, priorCompletionRate)
     },
     {
@@ -1289,7 +1742,7 @@ export const ReportPage = ({
       label: "Break time",
       value: formatMetricDuration(breakSeconds),
       detail: "Healthy pacing",
-      delta: formatPercentDelta(breakSeconds, priorBreakSeconds),
+      delta: formatPercentDelta(breakSeconds, priorBreakSeconds, comparisonLabel),
       direction: getDeltaDirection(breakSeconds, priorBreakSeconds)
     },
     {
@@ -1299,7 +1752,7 @@ export const ReportPage = ({
       label: "Time procrastinated",
       value: formatMetricDuration(procrastinationSeconds),
       detail: `${procrastinationEntries} ${procrastinationEntries === 1 ? "entry" : "entries"}`,
-      delta: formatDurationDelta(procrastinationSeconds, priorProcrastinationSeconds),
+      delta: formatDurationDelta(procrastinationSeconds, priorProcrastinationSeconds, comparisonLabel),
       direction: getDeltaDirection(procrastinationSeconds, priorProcrastinationSeconds, true)
     },
     {
@@ -1309,7 +1762,7 @@ export const ReportPage = ({
       label: "Interruptions",
       value: formatMetricDuration(interruptionSeconds),
       detail: `${interruptionEntries} ${interruptionEntries === 1 ? "entry" : "entries"}`,
-      delta: formatDurationDelta(interruptionSeconds, priorInterruptionSeconds),
+      delta: formatDurationDelta(interruptionSeconds, priorInterruptionSeconds, comparisonLabel),
       direction: getDeltaDirection(interruptionSeconds, priorInterruptionSeconds, true)
     },
     {
@@ -1319,7 +1772,7 @@ export const ReportPage = ({
       label: "Focus streak",
       value: `${currentStreak}`,
       detail: `Best: ${bestStreak} days`,
-      delta: formatCountDelta(currentStreak, priorStreak, "days"),
+      delta: formatCountDelta(currentStreak, priorStreak, "days", comparisonLabel),
       direction: getDeltaDirection(currentStreak, priorStreak)
     },
     {
@@ -1330,14 +1783,15 @@ export const ReportPage = ({
       value: String(monthlyTaskSummary.openOverdueCount),
       detail:
         monthlyTaskSummary.openOverdueCount < priorMonthlyTaskSummary.openOverdueCount
-          ? `${priorMonthlyTaskSummary.openOverdueCount - monthlyTaskSummary.openOverdueCount} improved this month`
+          ? `${priorMonthlyTaskSummary.openOverdueCount - monthlyTaskSummary.openOverdueCount} improved in ${periodScopeLabel}`
           : monthlyTaskSummary.openOverdueCount > priorMonthlyTaskSummary.openOverdueCount
-            ? `${monthlyTaskSummary.openOverdueCount - priorMonthlyTaskSummary.openOverdueCount} added this month`
-            : "No change this month",
+            ? `${monthlyTaskSummary.openOverdueCount - priorMonthlyTaskSummary.openOverdueCount} added in ${periodScopeLabel}`
+            : `No change in ${periodScopeLabel}`,
       delta: formatCountDelta(
         monthlyTaskSummary.openOverdueCount,
         priorMonthlyTaskSummary.openOverdueCount,
-        "tasks"
+        "tasks",
+        comparisonLabel
       ),
       direction: getDeltaDirection(
         monthlyTaskSummary.openOverdueCount,
@@ -1394,7 +1848,10 @@ export const ReportPage = ({
     chartPadding
   );
   const selectedTrendPoint =
-    trendData.find((point) => point.day === selectedTrendDay) ?? trendData[0] ?? null;
+    trendData.find((point) => point.key === selectedTrendKey) ??
+    trendData[Math.min(13, Math.max(trendData.length - 1, 0))] ??
+    trendData[0] ??
+    null;
   const selectedTrendIndex = selectedTrendPoint ? trendData.indexOf(selectedTrendPoint) : 0;
   const usableWidth = chartWidth - chartPadding.left - chartPadding.right;
   const usableHeight = chartHeight - chartPadding.top - chartPadding.bottom;
@@ -1454,12 +1911,12 @@ export const ReportPage = ({
       label: "Peak procrastination day",
       value:
         heaviestProcrastinationPoint && heaviestProcrastinationPoint.procrastinationMinutes > 0
-          ? `${visibleMonth.toLocaleDateString(undefined, { month: "short" })} ${heaviestProcrastinationPoint.day}`
+          ? heaviestProcrastinationPoint.tooltipLabel
           : "None",
       detail:
         heaviestProcrastinationPoint && heaviestProcrastinationPoint.procrastinationMinutes > 0
           ? formatMinutesDuration(heaviestProcrastinationPoint.procrastinationMinutes)
-          : "No entries this month",
+          : `No entries in ${periodScopeLabel}`,
       tone: "orange"
     },
     {
@@ -1467,12 +1924,12 @@ export const ReportPage = ({
       label: "Peak interruption day",
       value:
         heaviestInterruptionPoint && heaviestInterruptionPoint.interruptionMinutes > 0
-          ? `${visibleMonth.toLocaleDateString(undefined, { month: "short" })} ${heaviestInterruptionPoint.day}`
+          ? heaviestInterruptionPoint.tooltipLabel
           : "None",
       detail:
         heaviestInterruptionPoint && heaviestInterruptionPoint.interruptionMinutes > 0
           ? formatMinutesDuration(heaviestInterruptionPoint.interruptionMinutes)
-          : "No interruptions this month",
+          : `No interruptions in ${periodScopeLabel}`,
       tone: "red"
     },
     {
@@ -1483,7 +1940,7 @@ export const ReportPage = ({
         : "0m",
       detail: longestInterruptionEntry
         ? `${longestInterruptionEntry.dateLabel} - ${longestInterruptionEntry.taskTitle}`
-        : "No interruptions this month",
+        : `No interruptions in ${periodScopeLabel}`,
       tone: "violet"
     },
     {
@@ -1493,33 +1950,37 @@ export const ReportPage = ({
       detail:
         monthlyInterruptionEntries.length > 0
           ? `${Math.round((reasonsCaptured / monthlyInterruptionEntries.length) * 100)}% with reasons`
-          : "No interruptions this month",
+          : `No interruptions in ${periodScopeLabel}`,
       tone: "violet"
     }
   ];
-  const monthActivityDays = calendarDays.filter((day) => day.isCurrentMonth);
-  const maxPomodoros = Math.max(1, ...monthActivityDays.map((day) => day.completedPomodoros));
-  const procrastinationMinutesByDay = new Map(
-    trendData.map((point) => [point.key, point.procrastinationMinutes])
+  const rangeActivityDays = reportCalendarMonths
+    .flatMap((monthData) => monthData.days)
+    .filter((day) => day.isCurrentMonth && isDateInRange(day.date, reportRange));
+  const maxPomodoros = Math.max(1, ...rangeActivityDays.map((day) => day.completedPomodoros));
+  const procrastinationMinutesByDay = useMemo(
+    () => sumRecordsByDay(allProcrastinationRecords, reportRange),
+    [allProcrastinationRecords, reportRange.start, reportRange.endExclusive]
   );
   const maxProcrastinationMinutes = Math.max(
     1,
-    ...trendData.map((point) => point.procrastinationMinutes)
+    ...rangeActivityDays.map((day) => procrastinationMinutesByDay.get(day.key) ?? 0)
   );
-  const interruptionMinutesByDay = new Map(
-    trendData.map((point) => [point.key, point.interruptionMinutes])
+  const interruptionMinutesByDay = useMemo(
+    () => sumRecordsByDay(allInterruptionRecords, reportRange),
+    [allInterruptionRecords, reportRange.start, reportRange.endExclusive]
   );
   const maxInterruptionMinutes = Math.max(
     1,
-    ...trendData.map((point) => point.interruptionMinutes)
+    ...rangeActivityDays.map((day) => interruptionMinutesByDay.get(day.key) ?? 0)
   );
   const insights = buildInsights(
-    visibleMonth,
     trendData,
     monthSessions,
     priorMonthSessions,
     monthlyProcrastinationEntries,
-    monthlyInterruptionEntries
+    monthlyInterruptionEntries,
+    comparisonLabel
   );
   const totalHealth = Math.max(monthlyTaskSummary.taskCount, 1);
   const onTimePercent = Math.round((monthlyTaskSummary.completedOnTimeCount / totalHealth) * 100);
@@ -1531,13 +1992,139 @@ export const ReportPage = ({
     "--behind-deg": `${(onTimePercent + openOverduePercent) * 3.6}deg`,
     "--overdue-deg": `${(onTimePercent + openOverduePercent + overduePercent) * 3.6}deg`
   } as CSSProperties;
+  const visibleProcrastinationEntries = useMemo(
+    () =>
+      logFilter
+        ? monthlyProcrastinationEntries.filter((entry) =>
+            isInDateRange(entry.startedAt, logFilter.range)
+          )
+        : monthlyProcrastinationEntries,
+    [logFilter, monthlyProcrastinationEntries]
+  );
+  const visibleInterruptionEntries = useMemo(
+    () =>
+      logFilter
+        ? monthlyInterruptionEntries.filter((entry) =>
+            isInDateRange(entry.startedAt, logFilter.range)
+          )
+        : monthlyInterruptionEntries,
+    [logFilter, monthlyInterruptionEntries]
+  );
+  const visibleProcrastinationSeconds = visibleProcrastinationEntries.reduce(
+    (sum, entry) => sum + entry.durationSeconds,
+    0
+  );
+  const visibleInterruptionSeconds = visibleInterruptionEntries.reduce(
+    (sum, entry) => sum + entry.durationSeconds,
+    0
+  );
+  const visibleNotesCaptured = visibleProcrastinationEntries.filter(
+    (entry) => entry.note.length > 0
+  ).length;
+  const visibleReasonsCaptured = visibleInterruptionEntries.filter(
+    (entry) => entry.reason.length > 0
+  ).length;
+  const logEmptyScopeText = logFilter ? `for ${logFilter.label}` : `in ${periodScopeLabel}`;
+  const drillIntoLogs = (range: DateRange, label: string): void => {
+    setLogFilter({
+      range: {
+        start: maxDate(range.start, reportRange.start),
+        endExclusive: minDate(range.endExclusive, reportRange.endExclusive)
+      },
+      label
+    });
+    setSelectedCalendarDay(null);
+    setViewMode("trends");
+  };
+  const drillIntoLogsForDate = (date: Date): void => {
+    const start = startOfDay(date);
+
+    drillIntoLogs(
+      {
+        start,
+        endExclusive: addDays(start, 1)
+      },
+      formatDateLabel(start)
+    );
+  };
+  const renderActivityCalendar = (
+    monthData: CalendarMonthData,
+    metric: "focus" | "procrastination" | "interruption"
+  ): JSX.Element => {
+    const title =
+      metric === "focus" ? "Focus" : metric === "procrastination" ? "Procrastination" : "Interruptions";
+    const metricCalendarClass =
+      metric === "focus" ? "" : ` report-month-activity-calendar--${metric}`;
+    const metricDayClass =
+      metric === "focus" ? "" : ` report-month-activity-day--${metric}`;
+    const maxValue =
+      metric === "focus"
+        ? maxPomodoros
+        : metric === "procrastination"
+          ? maxProcrastinationMinutes
+          : maxInterruptionMinutes;
+    const getValue = (day: CalendarDayData): number => {
+      if (metric === "focus") {
+        return day.completedPomodoros;
+      }
+
+      return metric === "procrastination"
+        ? (procrastinationMinutesByDay.get(day.key) ?? 0)
+        : (interruptionMinutesByDay.get(day.key) ?? 0);
+    };
+
+    return (
+      <div className="report-activity-calendar-block" key={`${monthData.key}-${metric}`}>
+        <span className="report-activity-calendar-title">{title}</span>
+        <div className={`report-month-activity-calendar${metricCalendarClass}`}>
+          <div className="report-month-activity-weekdays">
+            {weekdayLabels.map((weekday) => (
+              <span key={weekday}>{weekday[0]}</span>
+            ))}
+          </div>
+          <div className="report-month-activity-grid">
+            {monthData.weeks.flat().map((day) => {
+              const isSelectableActivityDay =
+                day.isCurrentMonth && isDateInRange(day.date, reportRange);
+              const value = getValue(day);
+              const intensity = isSelectableActivityDay
+                ? metric === "focus"
+                  ? getActivityIntensity(value, maxValue)
+                  : getProcrastinationIntensity(value, maxValue)
+                : "outside";
+
+              return (
+                <button
+                  aria-label={`${day.date.toLocaleDateString()} ${metric} activity`}
+                  className={[
+                    "report-month-activity-day",
+                    metricDayClass,
+                    `intensity-${intensity}`,
+                    day.isToday ? "is-today" : ""
+                  ].join(" ")}
+                  disabled={!isSelectableActivityDay}
+                  key={`${metric}-${day.key}`}
+                  onClick={() => drillIntoLogsForDate(day.date)}
+                  type="button"
+                >
+                  {isSelectableActivityDay && value > 0 ? (
+                    <strong>{metric === "focus" ? value : `${value}m`}</strong>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const chartSection = (
     <section className="report-panel report-trends-panel">
       <div className="report-section-header">
         <div>
-          <h2>Monthly Trends</h2>
-          <p>Daily overview of your focus, break, and procrastination time.</p>
+          <h2>Period Trends</h2>
+          <p>Overview of your focus, break, procrastination, and interruption time.</p>
         </div>
         <div className="report-graph-legend">
           <div className="report-graph-legend-item report-graph-legend-item--focus">
@@ -1561,7 +2148,7 @@ export const ReportPage = ({
 
       <div className="report-graph-canvas">
         <svg
-          aria-label="Monthly activity trends"
+          aria-label="Period activity trends"
           className="report-trend-chart"
           role="img"
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -1592,17 +2179,19 @@ export const ReportPage = ({
             const x =
               chartPadding.left +
               (usableWidth * index) / Math.max(trendData.length - 1, 1);
-            const shouldLabel = point.day === 1 || point.day === trendData.length || point.day % 5 === 0;
+            const labelEvery = Math.max(1, Math.ceil(trendData.length / 8));
+            const shouldLabel =
+              index === 0 || index === trendData.length - 1 || index % labelEvery === 0;
 
             return shouldLabel ? (
               <text
                 className="report-trend-axis-label"
-                key={`day-${point.day}`}
+                key={`label-${point.key}`}
                 textAnchor="middle"
                 x={x}
                 y={chartHeight - 8}
               >
-                {point.day}
+                {point.label}
               </text>
             ) : null;
           })}
@@ -1624,10 +2213,7 @@ export const ReportPage = ({
                 y={Math.max(8, selectedTrendFocusY - 74)}
               >
                 <div className="report-trend-tooltip">
-                  <strong>
-                    {visibleMonth.toLocaleDateString(undefined, { month: "short" })}{" "}
-                    {selectedTrendPoint.day}
-                  </strong>
+                  <strong>{selectedTrendPoint.tooltipLabel}</strong>
                   <span>Focus time {formatMinutesDuration(selectedTrendPoint.focusMinutes)}</span>
                   <span>Pomodoros {selectedTrendPoint.pomodoros}</span>
                   <span>Break time {formatMinutesDuration(selectedTrendPoint.breakMinutes)}</span>
@@ -1670,7 +2256,22 @@ export const ReportPage = ({
               (point.interruptionMinutes / Math.max(leftAxisMax, 1)) * usableHeight;
 
             return (
-              <g key={`point-${point.day}`} onMouseEnter={() => setSelectedTrendDay(point.day)}>
+              <g
+                aria-label={`View logs for ${point.tooltipLabel}`}
+                className="report-trend-point-group"
+                key={`point-${point.key}`}
+                onClick={() => drillIntoLogs(point, point.tooltipLabel)}
+                onFocus={() => setSelectedTrendKey(point.key)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    drillIntoLogs(point, point.tooltipLabel);
+                  }
+                }}
+                onMouseEnter={() => setSelectedTrendKey(point.key)}
+                role="button"
+                tabIndex={0}
+              >
                 <circle className="report-trend-point report-trend-point--focus" cx={x} cy={focusY} r="4" />
                 <circle className="report-trend-point report-trend-point--breaks" cx={x} cy={breakY} r="4" />
                 <circle className="report-trend-point report-trend-point--procrastination" cx={x} cy={procrastinationY} r="4" />
@@ -1689,6 +2290,48 @@ export const ReportPage = ({
       </div>
     </section>
   );
+  const shiftReportPeriod = (delta: number): void => {
+    setSelectedTrendKey(null);
+    setLogFilter(null);
+
+    if (rangeMode === "year" || rangeMode === "year-to-date") {
+      setVisibleMonth((current) => addYears(current, delta));
+      return;
+    }
+
+    if (rangeMode === "quarter") {
+      setVisibleMonth((current) => addMonths(current, delta * 3));
+      return;
+    }
+
+    if (rangeMode === "custom") {
+      const dayDelta = getRangeDayCount(reportRange) * delta;
+      setCustomStartValue(formatDateInputValue(addDays(reportRange.start, dayDelta)));
+      setCustomEndValue(formatDateInputValue(addDays(addDays(reportRange.endExclusive, -1), dayDelta)));
+      return;
+    }
+
+    setVisibleMonth((current) => addMonths(current, delta));
+  };
+  const handleRangeModeChange = (value: ReportRangeMode): void => {
+    setRangeMode(value);
+    setSelectedTrendKey(null);
+    setLogFilter(null);
+  };
+  const handleCustomStartChange = (value: string): void => {
+    setCustomStartValue(value);
+
+    if (value && customEndValue && value > customEndValue) {
+      setCustomEndValue(value);
+    }
+  };
+  const handleCustomEndChange = (value: string): void => {
+    setCustomEndValue(value);
+
+    if (value && customStartValue && value < customStartValue) {
+      setCustomStartValue(value);
+    }
+  };
 
   return (
     <section className={`report-shell report-shell--${viewMode}`}>
@@ -1696,26 +2339,20 @@ export const ReportPage = ({
         <div className="report-calendar-nav report-calendar-nav--month">
           <button className="report-month-button" type="button">
             <ReportIcon name="calendar" />
-            <span>{formatMonthLabel(visibleMonth)}</span>
+            <span>{reportRangeLabel}</span>
           </button>
           <button
-            aria-label="Previous month"
+            aria-label={`Previous ${periodNoun}`}
             className="report-arrow-button"
-            onClick={() => {
-              setVisibleMonth((current) => addMonths(current, -1));
-              setSelectedTrendDay(1);
-            }}
+            onClick={() => shiftReportPeriod(-1)}
             type="button"
           >
             &lt;
           </button>
           <button
-            aria-label="Next month"
+            aria-label={`Next ${periodNoun}`}
             className="report-arrow-button"
-            onClick={() => {
-              setVisibleMonth((current) => addMonths(current, 1));
-              setSelectedTrendDay(1);
-            }}
+            onClick={() => shiftReportPeriod(1)}
             type="button"
           >
             &gt;
@@ -1737,10 +2374,39 @@ export const ReportPage = ({
           ))}
         </div>
 
-        <button className="report-range-button" type="button">
-          This month
-          <span aria-hidden="true">v</span>
-        </button>
+        <div className="report-range-control">
+          <select
+            aria-label="Report date range"
+            className="report-range-button report-range-select"
+            value={rangeMode}
+            onChange={(event) => handleRangeModeChange(event.currentTarget.value as ReportRangeMode)}
+          >
+            <option value="month">Month</option>
+            <option value="quarter">Quarter</option>
+            <option value="year-to-date">Year to date</option>
+            <option value="year">Year</option>
+            <option value="custom">Custom range</option>
+          </select>
+          {rangeMode === "custom" ? (
+            <div className="report-custom-range-fields">
+              <input
+                aria-label="Custom range start"
+                type="date"
+                value={customStartValue}
+                onChange={(event) => handleCustomStartChange(event.currentTarget.value)}
+                onInput={(event) => handleCustomStartChange(event.currentTarget.value)}
+              />
+              <span>to</span>
+              <input
+                aria-label="Custom range end"
+                type="date"
+                value={customEndValue}
+                onChange={(event) => handleCustomEndChange(event.currentTarget.value)}
+                onInput={(event) => handleCustomEndChange(event.currentTarget.value)}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="report-summary-grid">
@@ -1766,132 +2432,183 @@ export const ReportPage = ({
       </div>
 
       {viewMode === "calendar" ? (
-        <section className="report-panel report-calendar-panel">
+        <section className={`report-panel report-calendar-panel${isRangeCalendarView ? " is-range-view" : ""}`}>
           <div className="report-section-header">
             <div>
-              <h2>Monthly Calendar</h2>
-              <p>Track due dates, completed tasks, and finished pomodoros across the month.</p>
+              <h2>{isRangeCalendarView ? "Range Calendar" : "Monthly Calendar"}</h2>
+              <p>
+                {isRangeCalendarView
+                  ? `${reportRangeLabel} across ${reportCalendarMonths.length} months. Days outside the selected range are dimmed.`
+                  : "Track due dates, completed tasks, and finished pomodoros across the month."}
+              </p>
             </div>
           </div>
-          <div className="report-calendar-weekdays">
-            {weekdayLabels.map((weekday) => (
-              <span key={weekday}>{weekday}</span>
-            ))}
-          </div>
-          <div className="report-calendar-grid">
-            {calendarWeeks.map((week, weekIndex) => (
-              <div className="report-calendar-week" key={`week-${weekIndex + 1}`}>
-                {week.map((day) => (
-                  <article
-                    className={[
-                      "report-calendar-day",
-                      day.isCurrentMonth ? "" : "is-outside",
-                      day.isToday ? "is-today" : "",
-                      day.completedPomodoros > 0 ? "has-pomodoros" : ""
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    key={day.key}
-                    onClick={() => setSelectedCalendarDay(day)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedCalendarDay(day);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="report-calendar-day-header">
-                      <span className="report-calendar-day-number">{day.date.getDate()}</span>
-                      <span className={`report-pomodoro-pill${day.completedPomodoros > 0 ? " is-active" : ""}`}>
-                        {day.completedPomodoros} pom
-                      </span>
+          <div
+            className={[
+              "report-calendar-months",
+              isRangeCalendarView ? "is-range-view" : "is-single-month",
+              isRangeCalendarView
+                ? `calendar-count-${Math.min(reportCalendarMonths.length, 4)}`
+                : "",
+              rangeMode === "year" ? "is-year-view" : "",
+              rangeMode === "custom" ? "is-stacked-view" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {reportCalendarMonths.map((monthData) => (
+              <article className="report-calendar-month-card" key={monthData.key}>
+                <header className="report-calendar-month-card-header">
+                  <strong>{formatMonthLabel(monthData.month)}</strong>
+                </header>
+                <div className="report-calendar-weekdays">
+                  {weekdayLabels.map((weekday) => (
+                    <span key={weekday}>{weekday}</span>
+                  ))}
+                </div>
+                <div className="report-calendar-grid">
+                  {monthData.weeks.map((week, weekIndex) => (
+                    <div className="report-calendar-week" key={`${monthData.key}-week-${weekIndex + 1}`}>
+                      {week.map((day) => {
+                        const isSelectableCalendarDay =
+                          day.isCurrentMonth && isDateInRange(day.date, reportRange);
+
+                        return (
+                          <article
+                            aria-disabled={!isSelectableCalendarDay}
+                            className={[
+                              "report-calendar-day",
+                              isSelectableCalendarDay ? "" : "is-outside",
+                              day.isToday ? "is-today" : "",
+                              day.completedPomodoros > 0 ? "has-pomodoros" : ""
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            key={day.key}
+                            onClick={
+                              isSelectableCalendarDay
+                                ? () => setSelectedCalendarDay(day)
+                                : undefined
+                            }
+                            onKeyDown={(event) => {
+                              if (
+                                isSelectableCalendarDay &&
+                                (event.key === "Enter" || event.key === " ")
+                              ) {
+                                event.preventDefault();
+                                setSelectedCalendarDay(day);
+                              }
+                            }}
+                            role={isSelectableCalendarDay ? "button" : undefined}
+                            tabIndex={isSelectableCalendarDay ? 0 : -1}
+                          >
+                            <div className="report-calendar-day-header">
+                              <span className="report-calendar-day-number">{day.date.getDate()}</span>
+                              {!isRangeCalendarView || day.completedPomodoros > 0 ? (
+                                <span className={`report-pomodoro-pill${day.completedPomodoros > 0 ? " is-active" : ""}`}>
+                                  {isRangeCalendarView ? day.completedPomodoros : `${day.completedPomodoros} pom`}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {day.dueTasks.length > 0 ? (
+                              <div className="report-calendar-section">
+                                <span className="report-calendar-section-label">Due</span>
+                                <div className="report-calendar-badge-list">
+                                  {day.dueTasks.slice(0, 2).map((task) => (
+                                    <button
+                                      className="report-task-badge-row report-task-badge-row--due"
+                                      key={task.id}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+
+                                        if (task.taskId) {
+                                          onOpenTask(task.taskId, "default");
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      <CollectionBadge color={getTaskBadgeColor(task)} compact name={task.title} />
+                                    </button>
+                                  ))}
+                                  {day.dueTasks.length > 2 ? (
+                                    <span className="report-calendar-more">+{day.dueTasks.length - 2} more</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {day.completedTasks.length > 0 ? (
+                              <div className="report-calendar-section">
+                                <span className="report-calendar-section-label report-calendar-section-label--success">
+                                  Closed
+                                </span>
+                                <div className="report-calendar-badge-list">
+                                  {day.completedTasks.slice(0, 2).map((task) => (
+                                    <button
+                                      className="report-task-badge-row report-task-badge-row--completed"
+                                      key={task.id}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+
+                                        if (task.taskId) {
+                                          onOpenTask(task.taskId, "completed");
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className="report-task-check">✓</span>
+                                      <CollectionBadge color={getTaskBadgeColor(task)} compact name={task.title} />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
                     </div>
-
-                    {day.dueTasks.length > 0 ? (
-                      <div className="report-calendar-section">
-                        <span className="report-calendar-section-label">Due</span>
-                        <div className="report-calendar-badge-list">
-                          {day.dueTasks.slice(0, 2).map((task) => (
-                            <button
-                              className="report-task-badge-row report-task-badge-row--due"
-                              key={task.id}
-                              onClick={(event) => {
-                                event.stopPropagation();
-
-                                if (task.taskId) {
-                                  onOpenTask(task.taskId, "default");
-                                }
-                              }}
-                              type="button"
-                            >
-                              <CollectionBadge color={getTaskBadgeColor(task)} compact name={task.title} />
-                            </button>
-                          ))}
-                          {day.dueTasks.length > 2 ? (
-                            <span className="report-calendar-more">+{day.dueTasks.length - 2} more</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {day.completedTasks.length > 0 ? (
-                      <div className="report-calendar-section">
-                        <span className="report-calendar-section-label report-calendar-section-label--success">
-                          Closed
-                        </span>
-                        <div className="report-calendar-badge-list">
-                          {day.completedTasks.slice(0, 2).map((task) => (
-                            <button
-                              className="report-task-badge-row report-task-badge-row--completed"
-                              key={task.id}
-                              onClick={(event) => {
-                                event.stopPropagation();
-
-                                if (task.taskId) {
-                                  onOpenTask(task.taskId, "completed");
-                                }
-                              }}
-                              type="button"
-                            >
-                              <span className="report-task-check">✓</span>
-                              <CollectionBadge color={getTaskBadgeColor(task)} compact name={task.title} />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </article>
             ))}
           </div>
         </section>
       ) : viewMode === "trends" ? (
         <div className="report-trends-tab">
+          {logFilter ? (
+            <div className="report-log-filter-bar">
+              <span>
+                Showing logs for <strong>{logFilter.label}</strong>
+              </span>
+              <button className="ghost-button" onClick={() => setLogFilter(null)} type="button">
+                Clear filter
+              </button>
+            </div>
+          ) : null}
           <div className="report-trends-tab-grid">
             <section className="report-panel report-procrastination-panel">
               <div className="report-section-header">
                 <div>
                   <h2>Procrastination Log</h2>
                   <p>
-                    {formatMonthLabel(visibleMonth)} - {formatMetricDuration(procrastinationSeconds)}
+                    {logFilter ? logFilter.label : reportRangeLabel} -{" "}
+                    {formatMetricDuration(visibleProcrastinationSeconds)}
                   </p>
                 </div>
               </div>
 
               <div className="report-procrastination-summary">
                 <span>
-                  <strong>{monthlyProcrastinationEntries.length}</strong>
+                  <strong>{visibleProcrastinationEntries.length}</strong>
                   entries
                 </span>
                 <span>
                   <strong>
-                    {monthlyProcrastinationEntries.length > 0
+                    {visibleProcrastinationEntries.length > 0
                       ? formatMetricDuration(
                           Math.round(
-                            procrastinationSeconds / monthlyProcrastinationEntries.length
+                            visibleProcrastinationSeconds / visibleProcrastinationEntries.length
                           )
                         )
                       : "0m"}
@@ -1899,14 +2616,14 @@ export const ReportPage = ({
                   avg
                 </span>
                 <span>
-                  <strong>{notesCaptured}</strong>
+                  <strong>{visibleNotesCaptured}</strong>
                   notes
                 </span>
               </div>
 
-              {monthlyProcrastinationEntries.length > 0 ? (
+              {visibleProcrastinationEntries.length > 0 ? (
                 <div className="report-procrastination-list">
-                  {monthlyProcrastinationEntries.map((entry) => (
+                  {visibleProcrastinationEntries.map((entry) => (
                     <article className="report-procrastination-entry" key={entry.id}>
                       <div className="report-procrastination-entry-time">
                         <strong>{formatMetricDuration(entry.durationSeconds)}</strong>
@@ -1923,7 +2640,7 @@ export const ReportPage = ({
                 </div>
               ) : (
                 <div className="report-procrastination-empty">
-                  No procrastination recorded this month.
+                  No procrastination recorded {logEmptyScopeText}.
                 </div>
               )}
             </section>
@@ -1933,35 +2650,36 @@ export const ReportPage = ({
                 <div>
                   <h2>Interruption Log</h2>
                   <p>
-                    {formatMonthLabel(visibleMonth)} - {formatMetricDuration(interruptionSeconds)}
+                    {logFilter ? logFilter.label : reportRangeLabel} -{" "}
+                    {formatMetricDuration(visibleInterruptionSeconds)}
                   </p>
                 </div>
               </div>
 
               <div className="report-procrastination-summary">
                 <span>
-                  <strong>{monthlyInterruptionEntries.length}</strong>
+                  <strong>{visibleInterruptionEntries.length}</strong>
                   entries
                 </span>
                 <span>
                   <strong>
-                    {monthlyInterruptionEntries.length > 0
+                    {visibleInterruptionEntries.length > 0
                       ? formatMetricDuration(
-                          Math.round(interruptionSeconds / monthlyInterruptionEntries.length)
+                          Math.round(visibleInterruptionSeconds / visibleInterruptionEntries.length)
                         )
                       : "0m"}
                   </strong>
                   avg
                 </span>
                 <span>
-                  <strong>{reasonsCaptured}</strong>
+                  <strong>{visibleReasonsCaptured}</strong>
                   reasons
                 </span>
               </div>
 
-              {monthlyInterruptionEntries.length > 0 ? (
+              {visibleInterruptionEntries.length > 0 ? (
                 <div className="report-procrastination-list">
-                  {monthlyInterruptionEntries.map((entry) => (
+                  {visibleInterruptionEntries.map((entry) => (
                     <article
                       className="report-procrastination-entry report-interruption-entry"
                       key={entry.id}
@@ -1981,7 +2699,7 @@ export const ReportPage = ({
                 </div>
               ) : (
                 <div className="report-procrastination-empty">
-                  No interruptions recorded this month.
+                  No interruptions recorded {logEmptyScopeText}.
                 </div>
               )}
             </section>
@@ -1999,6 +2717,59 @@ export const ReportPage = ({
               </article>
             ))}
           </div>
+
+          <section className="report-panel report-study-panel">
+            <div className="report-section-header">
+              <div>
+                <h2>Study Problems</h2>
+                <p>Problem-focused work for {periodDescriptor}.</p>
+              </div>
+            </div>
+
+            <div className="report-study-summary">
+              <article>
+                <span>Studied in range</span>
+                <strong>{studiedProblemsInRange.length}</strong>
+              </article>
+              <article>
+                <span>Study time</span>
+                <strong>{formatMetricDuration(studySecondsInRange)}</strong>
+              </article>
+              <article>
+                <span>Total completions</span>
+                <strong>{totalStudyCompletions}</strong>
+              </article>
+            </div>
+
+            {topStudyProblems.length > 0 ? (
+              <div className="report-study-list">
+                {topStudyProblems.map((problem) => (
+                  <article className="report-study-item" key={problem.id}>
+                    <div>
+                      <strong>{problem.title}</strong>
+                      <span>
+                        {[problem.platform, problem.difficulty, problem.topic]
+                          .filter((value) => value && value.length > 0)
+                          .join(" · ") || "No metadata"}
+                      </span>
+                    </div>
+                    <div className="report-study-meta">
+                      <strong>{formatMetricDuration(problem.rangeTrackedSeconds)}</strong>
+                      <span>
+                        {problem.sessionCount} session{problem.sessionCount === 1 ? "" : "s"} ·{" "}
+                        {problem.timesCompleted} complete
+                        {problem.timesCompleted === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="report-study-empty">
+                No study-problem sessions recorded in {periodScopeLabel}.
+              </div>
+            )}
+          </section>
         </div>
       ) : (
         <>
@@ -2009,25 +2780,25 @@ export const ReportPage = ({
               <div className="report-section-header">
                 <div>
                   <h2>Performance Snapshot</h2>
-                  <p>Task outcomes for this month.</p>
+                  <p>Task outcomes for {periodDescriptor}.</p>
                 </div>
               </div>
 
               <div className="report-snapshot-grid">
                 <article className="report-snapshot-card report-snapshot-card--blue">
-                  <span>Tasks this month</span>
+                  <span>{periodTaskLabel}</span>
                   <strong>{monthlyTaskSummary.taskCount}</strong>
-                  <em>{formatPercentDelta(monthlyTaskSummary.taskCount, priorMonthlyTaskSummary.taskCount)}</em>
+                  <em>{formatPercentDelta(monthlyTaskSummary.taskCount, priorMonthlyTaskSummary.taskCount, comparisonLabel)}</em>
                 </article>
                 <article className="report-snapshot-card report-snapshot-card--green">
                   <span>Completed on time</span>
                   <strong>{monthlyTaskSummary.completedOnTimeCount}</strong>
-                  <em>{formatPercentDelta(monthlyTaskSummary.completedOnTimeCount, priorMonthlyTaskSummary.completedOnTimeCount)}</em>
+                  <em>{formatPercentDelta(monthlyTaskSummary.completedOnTimeCount, priorMonthlyTaskSummary.completedOnTimeCount, comparisonLabel)}</em>
                 </article>
                 <article className="report-snapshot-card report-snapshot-card--amber">
                   <span>Total overdue days</span>
                   <strong>{monthlyTaskSummary.overdueDaysTotal} days</strong>
-                  <em>{formatPercentDelta(monthlyTaskSummary.overdueDaysTotal, priorMonthlyTaskSummary.overdueDaysTotal)}</em>
+                  <em>{formatPercentDelta(monthlyTaskSummary.overdueDaysTotal, priorMonthlyTaskSummary.overdueDaysTotal, comparisonLabel)}</em>
                 </article>
                 <button
                   className="report-snapshot-card report-snapshot-card--red"
@@ -2036,7 +2807,7 @@ export const ReportPage = ({
                 >
                   <span>Open overdue</span>
                   <strong>{monthlyTaskSummary.openOverdueCount} tasks</strong>
-                  <em>{formatCountDelta(monthlyTaskSummary.openOverdueCount, priorMonthlyTaskSummary.openOverdueCount, "tasks")}</em>
+                  <em>{formatCountDelta(monthlyTaskSummary.openOverdueCount, priorMonthlyTaskSummary.openOverdueCount, "tasks", comparisonLabel)}</em>
                 </button>
               </div>
 
@@ -2080,19 +2851,19 @@ export const ReportPage = ({
                   </div>
                 </div>
                 <div className="report-activity-month">
-                  <strong>{formatMonthLabel(visibleMonth)}</strong>
+                  <strong>{reportRangeLabel}</strong>
                   <button
-                    aria-label="Previous month"
+                    aria-label={`Previous ${periodNoun}`}
                     className="report-arrow-button"
-                    onClick={() => setVisibleMonth((current) => addMonths(current, -1))}
+                    onClick={() => shiftReportPeriod(-1)}
                     type="button"
                   >
                     &lt;
                   </button>
                   <button
-                    aria-label="Next month"
+                    aria-label={`Next ${periodNoun}`}
                     className="report-arrow-button"
-                    onClick={() => setVisibleMonth((current) => addMonths(current, 1))}
+                    onClick={() => shiftReportPeriod(1)}
                     type="button"
                   >
                     &gt;
@@ -2119,127 +2890,30 @@ export const ReportPage = ({
                   ))}
                 </div>
 
-                <div className="report-activity-calendars">
-                  <div className="report-activity-calendar-block">
-                    <span className="report-activity-calendar-title">Focus</span>
-                    <div className="report-month-activity-calendar">
-                      <div className="report-month-activity-weekdays">
-                        {weekdayLabels.map((weekday) => (
-                          <span key={weekday}>{weekday[0]}</span>
-                        ))}
+                <div
+                  className={[
+                    "report-activity-calendars",
+                    isRangeCalendarView ? "is-range-view" : "",
+                    rangeMode === "year" ? "is-year-view" : "",
+                    rangeMode === "custom" ? "is-stacked-view" : ""
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {reportCalendarMonths.map((monthData) => (
+                    <section className="report-activity-range-month" key={monthData.key}>
+                      {isRangeCalendarView ? (
+                        <strong className="report-activity-range-month-title">
+                          {formatMonthLabel(monthData.month)}
+                        </strong>
+                      ) : null}
+                      <div className="report-activity-range-month-calendars">
+                        {renderActivityCalendar(monthData, "focus")}
+                        {renderActivityCalendar(monthData, "procrastination")}
+                        {renderActivityCalendar(monthData, "interruption")}
                       </div>
-                      <div className="report-month-activity-grid">
-                        {calendarWeeks.flat().map((day) => {
-                          const intensity = day.isCurrentMonth
-                            ? getActivityIntensity(day.completedPomodoros, maxPomodoros)
-                            : "outside";
-
-                          return (
-                            <button
-                              aria-label={`${day.date.toLocaleDateString()} focus activity`}
-                              className={[
-                                "report-month-activity-day",
-                                `intensity-${intensity}`,
-                                day.isToday ? "is-today" : ""
-                              ].join(" ")}
-                              disabled={!day.isCurrentMonth}
-                              key={day.key}
-                              onClick={() => setSelectedCalendarDay(day)}
-                              type="button"
-                            >
-                              {day.isCurrentMonth && day.completedPomodoros > 0 ? (
-                                <strong>{day.completedPomodoros}</strong>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="report-activity-calendar-block">
-                    <span className="report-activity-calendar-title">Procrastination</span>
-                    <div className="report-month-activity-calendar report-month-activity-calendar--procrastination">
-                      <div className="report-month-activity-weekdays">
-                        {weekdayLabels.map((weekday) => (
-                          <span key={weekday}>{weekday[0]}</span>
-                        ))}
-                      </div>
-                      <div className="report-month-activity-grid">
-                        {calendarWeeks.flat().map((day) => {
-                          const procrastinationMinutes = procrastinationMinutesByDay.get(day.key) ?? 0;
-                          const intensity = day.isCurrentMonth
-                            ? getProcrastinationIntensity(
-                                procrastinationMinutes,
-                                maxProcrastinationMinutes
-                              )
-                            : "outside";
-
-                          return (
-                            <button
-                              aria-label={`${day.date.toLocaleDateString()} procrastination activity`}
-                              className={[
-                                "report-month-activity-day",
-                                "report-month-activity-day--procrastination",
-                                `intensity-${intensity}`,
-                                day.isToday ? "is-today" : ""
-                              ].join(" ")}
-                              disabled={!day.isCurrentMonth}
-                              key={day.key}
-                              onClick={() => setSelectedCalendarDay(day)}
-                              type="button"
-                            >
-                              {day.isCurrentMonth && procrastinationMinutes > 0 ? (
-                                <strong>{procrastinationMinutes}m</strong>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="report-activity-calendar-block">
-                    <span className="report-activity-calendar-title">Interruptions</span>
-                    <div className="report-month-activity-calendar report-month-activity-calendar--interruption">
-                      <div className="report-month-activity-weekdays">
-                        {weekdayLabels.map((weekday) => (
-                          <span key={weekday}>{weekday[0]}</span>
-                        ))}
-                      </div>
-                      <div className="report-month-activity-grid">
-                        {calendarWeeks.flat().map((day) => {
-                          const interruptionMinutes = interruptionMinutesByDay.get(day.key) ?? 0;
-                          const intensity = day.isCurrentMonth
-                            ? getProcrastinationIntensity(
-                                interruptionMinutes,
-                                maxInterruptionMinutes
-                              )
-                            : "outside";
-
-                          return (
-                            <button
-                              aria-label={`${day.date.toLocaleDateString()} interruption activity`}
-                              className={[
-                                "report-month-activity-day",
-                                "report-month-activity-day--interruption",
-                                `intensity-${intensity}`,
-                                day.isToday ? "is-today" : ""
-                              ].join(" ")}
-                              disabled={!day.isCurrentMonth}
-                              key={day.key}
-                              onClick={() => setSelectedCalendarDay(day)}
-                              type="button"
-                            >
-                              {day.isCurrentMonth && interruptionMinutes > 0 ? (
-                                <strong>{interruptionMinutes}m</strong>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
+                    </section>
+                  ))}
                 </div>
               </div>
             </section>
@@ -2303,13 +2977,22 @@ export const ReportPage = ({
                   {selectedCalendarDay.completedPomodoros === 1 ? "" : "s"} completed
                 </p>
               </div>
-              <button
-                className="ghost-button"
-                onClick={() => setSelectedCalendarDay(null)}
-                type="button"
-              >
-                Close
-              </button>
+              <div className="report-day-modal-actions">
+                <button
+                  className="ghost-button"
+                  onClick={() => drillIntoLogsForDate(selectedCalendarDay.date)}
+                  type="button"
+                >
+                  View logs
+                </button>
+                <button
+                  className="ghost-button"
+                  onClick={() => setSelectedCalendarDay(null)}
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="report-day-modal-stack">
@@ -2389,7 +3072,7 @@ export const ReportPage = ({
               <div>
                 <h3>Open Overdue</h3>
                 <p>
-                  {formatMonthLabel(visibleMonth)} - {openOverdueDetails.length} open overdue task
+                  {reportRangeLabel} - {openOverdueDetails.length} open overdue task
                   {openOverdueDetails.length === 1 ? "" : "s"}
                 </p>
               </div>
@@ -2423,7 +3106,7 @@ export const ReportPage = ({
                 ))}
               </div>
             ) : (
-              <div className="empty-state">No open overdue tasks in this month.</div>
+              <div className="empty-state">No open overdue tasks in {periodScopeLabel}.</div>
             )}
           </div>
         </div>

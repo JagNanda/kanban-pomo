@@ -12,5 +12,20 @@ export const formatHoursFromSeconds = (seconds: number): string => {
   return `${hours.toFixed(hours >= 10 ? 1 : 2)}h`;
 };
 
-export const toIsoNow = (): string => new Date().toISOString();
+export const formatDurationSummary = (seconds: number): string => {
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${minutes}m`;
+};
+
+export const toIsoNow = (): string => new Date().toISOString();

@@ -139,6 +139,13 @@ const migrations: DatabaseMigration[] = [
           estimated_pomodoros INTEGER NOT NULL DEFAULT 0,
           actual_tracked_seconds INTEGER NOT NULL,
           pomodoro_count INTEGER NOT NULL,
+          is_study_problem INTEGER NOT NULL DEFAULT 0,
+          study_platform TEXT NOT NULL DEFAULT '',
+          study_url TEXT NOT NULL DEFAULT '',
+          study_difficulty TEXT,
+          study_topic TEXT NOT NULL DEFAULT '',
+          study_status TEXT NOT NULL DEFAULT 'unstarted',
+          times_completed INTEGER NOT NULL DEFAULT 0,
           completed_at TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
@@ -223,6 +230,13 @@ const migrations: DatabaseMigration[] = [
           project_color TEXT,
           pomodoro_count INTEGER NOT NULL,
           actual_tracked_seconds INTEGER NOT NULL,
+          is_study_problem INTEGER NOT NULL DEFAULT 0,
+          study_platform TEXT NOT NULL DEFAULT '',
+          study_url TEXT NOT NULL DEFAULT '',
+          study_difficulty TEXT,
+          study_topic TEXT NOT NULL DEFAULT '',
+          study_status TEXT NOT NULL DEFAULT 'unstarted',
+          times_completed INTEGER NOT NULL DEFAULT 0,
           deleted_at TEXT NOT NULL
         );
 
@@ -345,6 +359,57 @@ const migrations: DatabaseMigration[] = [
         CREATE INDEX IF NOT EXISTS idx_archived_interruption_records_started_at
           ON archived_interruption_records(started_at);
       `);
+    }
+  },
+  {
+    version: 5,
+    name: "study_problem_metadata",
+    up: (db) => {
+      addColumnIfMissing(db, "tasks", "is_study_problem", "INTEGER NOT NULL DEFAULT 0");
+      addColumnIfMissing(db, "tasks", "study_platform", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(db, "tasks", "study_url", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(db, "tasks", "study_difficulty", "TEXT");
+      addColumnIfMissing(db, "tasks", "study_topic", "TEXT NOT NULL DEFAULT ''");
+      addColumnIfMissing(db, "tasks", "study_status", "TEXT NOT NULL DEFAULT 'unstarted'");
+      addColumnIfMissing(db, "tasks", "times_completed", "INTEGER NOT NULL DEFAULT 0");
+
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "is_study_problem",
+        "INTEGER NOT NULL DEFAULT 0"
+      );
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "study_platform",
+        "TEXT NOT NULL DEFAULT ''"
+      );
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "study_url",
+        "TEXT NOT NULL DEFAULT ''"
+      );
+      addColumnIfMissing(db, "archived_completed_tasks", "study_difficulty", "TEXT");
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "study_topic",
+        "TEXT NOT NULL DEFAULT ''"
+      );
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "study_status",
+        "TEXT NOT NULL DEFAULT 'unstarted'"
+      );
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "times_completed",
+        "INTEGER NOT NULL DEFAULT 0"
+      );
     }
   }
 ];

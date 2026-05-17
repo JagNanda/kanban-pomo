@@ -6,6 +6,8 @@ import type { TaskProjectId } from "./task-project.types";
 
 export type TaskId = Brand<string, "TaskId">;
 export type TaskPriority = "low" | "medium" | "high";
+export type StudyProblemDifficulty = "easy" | "medium" | "hard";
+export type StudyProblemStatus = "unstarted" | "attempted" | "solved" | "reviewing";
 
 export interface Task {
   id: TaskId;
@@ -21,6 +23,13 @@ export interface Task {
   estimatedPomodoros: number;
   actualTrackedSeconds: number;
   pomodoroCount: number;
+  isStudyProblem: boolean;
+  studyPlatform: string;
+  studyUrl: string;
+  studyDifficulty: StudyProblemDifficulty | null;
+  studyTopic: string;
+  studyStatus: StudyProblemStatus;
+  timesCompleted: number;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;

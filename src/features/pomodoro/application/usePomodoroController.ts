@@ -12,6 +12,11 @@ import type {
 } from "../domain/pomodoro.types";
 import type { TaskId } from "../../tasks/domain/task.types";
 
+type InterruptedTimerState = Extract<
+  TimerState,
+  { status: "running"; phaseType: "interruption" }
+>["interruptedTimer"];
+
 interface UsePomodoroControllerOptions {
   onWorkSessionCompleted: (
     taskId: TaskId,
@@ -99,6 +104,33 @@ const getActualDurationForTimerState = (
         : state.remainingSeconds;
 
   return plannedDurationSeconds - remainingSeconds;
+};
+
+const restoreInterruptedTimer = (interruptedTimer: InterruptedTimerState): TimerState => {
+  if (interruptedTimer.priorStatus === "paused") {
+    return {
+      status: "paused",
+      taskId: interruptedTimer.taskId,
+      phaseType: "work",
+      plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
+      remainingSeconds: interruptedTimer.remainingSeconds,
+      elapsedSeconds: interruptedTimer.elapsedSeconds,
+      cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex,
+      startedAt: interruptedTimer.startedAt
+    };
+  }
+
+  return {
+    status: "running",
+    taskId: interruptedTimer.taskId,
+    phaseType: "work",
+    startedAt: interruptedTimer.startedAt,
+    endsAt: new Date(Date.now() + interruptedTimer.remainingSeconds * 1000).toISOString(),
+    plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
+    secondsRemaining: interruptedTimer.remainingSeconds,
+    secondsElapsed: interruptedTimer.elapsedSeconds,
+    cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex
+  };
 };
 
 export const usePomodoroController = ({
@@ -626,32 +658,16 @@ export const usePomodoroController = ({
           endedAt
         );
 
-        if (interruptedTimer.priorStatus === "paused") {
-          return {
-            status: "paused",
-            taskId: interruptedTimer.taskId,
-            phaseType: "work",
-            plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
-            remainingSeconds: interruptedTimer.remainingSeconds,
-            elapsedSeconds: interruptedTimer.elapsedSeconds,
-            cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex,
-            startedAt: interruptedTimer.startedAt
-          };
+        return restoreInterruptedTimer(interruptedTimer);
+      });
+    },
+    cancelInterruption: () => {
+      setState((current) => {
+        if (current.status !== "running" || current.phaseType !== "interruption") {
+          return current;
         }
 
-        return {
-          status: "running",
-          taskId: interruptedTimer.taskId,
-          phaseType: "work",
-          startedAt: interruptedTimer.startedAt,
-          endsAt: new Date(
-            Date.now() + interruptedTimer.remainingSeconds * 1000
-          ).toISOString(),
-          plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
-          secondsRemaining: interruptedTimer.remainingSeconds,
-          secondsElapsed: interruptedTimer.elapsedSeconds,
-          cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex
-        };
+        return restoreInterruptedTimer(current.interruptedTimer);
       });
     },
     updateConfig: (nextConfig: PomodoroConfig) => {

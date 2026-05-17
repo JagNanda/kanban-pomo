@@ -98,6 +98,13 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     estimatedPomodoros: row.estimated_pomodoros,
     actualTrackedSeconds: row.actual_tracked_seconds,
     pomodoroCount: row.pomodoro_count,
+    isStudyProblem: Boolean(row.is_study_problem),
+    studyPlatform: row.study_platform,
+    studyUrl: row.study_url,
+    studyDifficulty: row.study_difficulty,
+    studyTopic: row.study_topic,
+    studyStatus: row.study_status,
+    timesCompleted: row.times_completed,
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at

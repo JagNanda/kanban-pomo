@@ -69,6 +69,13 @@ export interface CreateTaskInput {
   taskCollectionId: TaskCollectionId;
   estimatedCompletionDate: string | null;
   estimatedPomodoros: number;
+  isStudyProblem: boolean;
+  studyPlatform: string;
+  studyUrl: string;
+  studyDifficulty: Task["studyDifficulty"];
+  studyTopic: string;
+  studyStatus: Task["studyStatus"];
+  timesCompleted: number;
 }
 
 const createId = (prefix: string): string =>
@@ -180,6 +187,13 @@ const buildArchivedDeletionState = (
           projectColor: project?.color ?? null,
           pomodoroCount: task.pomodoroCount,
           actualTrackedSeconds: task.actualTrackedSeconds,
+          isStudyProblem: task.isStudyProblem,
+          studyPlatform: task.studyPlatform,
+          studyUrl: task.studyUrl,
+          studyDifficulty: task.studyDifficulty,
+          studyTopic: task.studyTopic,
+          studyStatus: task.studyStatus,
+          timesCompleted: task.timesCompleted,
           deletedAt
         };
       })
@@ -905,6 +919,13 @@ export const useBoardState = () => {
                 estimatedPomodoros: taskInput.estimatedPomodoros,
                 actualTrackedSeconds: 0,
                 pomodoroCount: 0,
+                isStudyProblem: false,
+                studyPlatform: "",
+                studyUrl: "",
+                studyDifficulty: null,
+                studyTopic: "",
+                studyStatus: "unstarted",
+                timesCompleted: 0,
                 completedAt: null,
                 createdAt: now,
                 updatedAt: now
@@ -1063,7 +1084,14 @@ export const useBoardState = () => {
       taskProjectId,
       taskCollectionId,
       estimatedCompletionDate,
-      estimatedPomodoros
+      estimatedPomodoros,
+      isStudyProblem,
+      studyPlatform,
+      studyUrl,
+      studyDifficulty,
+      studyTopic,
+      studyStatus,
+      timesCompleted
     }: CreateTaskInput) => {
       updateState((current) => {
         const matchedCollection =
@@ -1092,6 +1120,13 @@ export const useBoardState = () => {
           estimatedPomodoros: Math.max(0, Math.floor(estimatedPomodoros)),
           actualTrackedSeconds: 0,
           pomodoroCount: 0,
+          isStudyProblem,
+          studyPlatform: studyPlatform.trim(),
+          studyUrl: studyUrl.trim(),
+          studyDifficulty,
+          studyTopic: studyTopic.trim(),
+          studyStatus,
+          timesCompleted: Math.max(0, Math.floor(timesCompleted)),
           completedAt: current.columns.some(
             (column) => column.id === columnId && isCompletedColumnName(column.name)
           )
@@ -1342,6 +1377,46 @@ export const useBoardState = () => {
             ? {
                 ...task,
                 pomodoroCount: Math.max(0, Math.floor(pomodoroCount)),
+                updatedAt: toIsoNow()
+              }
+            : task
+        )
+      }));
+    },
+    updateTaskStudyMetadata: (
+      taskId: TaskId,
+      updates: Partial<
+        Pick<
+          Task,
+          | "isStudyProblem"
+          | "studyPlatform"
+          | "studyUrl"
+          | "studyDifficulty"
+          | "studyTopic"
+          | "studyStatus"
+          | "timesCompleted"
+        >
+      >
+    ) => {
+      updateState((current) => ({
+        ...current,
+        tasks: current.tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                ...updates,
+                studyPlatform:
+                  updates.studyPlatform === undefined
+                    ? task.studyPlatform
+                    : updates.studyPlatform.trim(),
+                studyUrl:
+                  updates.studyUrl === undefined ? task.studyUrl : updates.studyUrl.trim(),
+                studyTopic:
+                  updates.studyTopic === undefined ? task.studyTopic : updates.studyTopic.trim(),
+                timesCompleted:
+                  updates.timesCompleted === undefined
+                    ? task.timesCompleted
+                    : Math.max(0, Math.floor(updates.timesCompleted)),
                 updatedAt: toIsoNow()
               }
             : task

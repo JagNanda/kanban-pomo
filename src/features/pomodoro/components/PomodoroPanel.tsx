@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDurationClock } from "../../../shared/lib/time";
+import { formatDurationClock, formatDurationSummary } from "../../../shared/lib/time";
 import {
   pomodoroChimeOptions,
   previewPomodoroChime
@@ -48,6 +48,7 @@ interface PomodoroPanelProps {
   onStopProcrastinating: (note: string) => void;
   onStartInterruption: () => void;
   onStopInterruption: (reason: string) => void;
+  onCancelInterruption: () => void;
   onReset: () => void;
 }
 
@@ -273,6 +274,7 @@ export const PomodoroPanel = ({
   onStopProcrastinating,
   onStartInterruption,
   onStopInterruption,
+  onCancelInterruption,
   onReset
 }: PomodoroPanelProps): JSX.Element => {
   const [isProcrastinationNoteOpen, setIsProcrastinationNoteOpen] = useState(false);
@@ -385,6 +387,11 @@ export const PomodoroPanel = ({
     setIsInterruptionReasonOpen(false);
     setInterruptionReason("");
   };
+  const cancelInterruption = (): void => {
+    onCancelInterruption();
+    setIsInterruptionReasonOpen(false);
+    setInterruptionReason("");
+  };
   const isInterruptionActive =
     timerState.status === "running" && timerState.phaseType === "interruption";
   const activeWorkTaskId =
@@ -443,14 +450,24 @@ export const PomodoroPanel = ({
 
           <div className="timer-actions timer-actions--focus">
             {isInterruptionActive ? (
-              <button
-                className="primary-button focus-action-button focus-action-button--primary"
-                onClick={handleEndInterruption}
-                type="button"
-              >
-                <PomodoroIcon name="check" />
-                End Interruption
-              </button>
+              <>
+                <button
+                  className="primary-button focus-action-button focus-action-button--primary"
+                  onClick={handleEndInterruption}
+                  type="button"
+                >
+                  <PomodoroIcon name="check" />
+                  End Interruption
+                </button>
+                <button
+                  className="danger-button focus-action-button"
+                  onClick={cancelInterruption}
+                  type="button"
+                >
+                  <PomodoroIcon name="x" />
+                  Cancel
+                </button>
+              </>
             ) : null}
 
             {!isInterruptionActive && timerState.status === "idle" && selectedTask ? (
@@ -738,6 +755,16 @@ export const PomodoroPanel = ({
                   tone="completed"
                 />
               </div>
+              <div className="focus-meta-row">
+                <span>{selectedTask.isStudyProblem ? "Study time" : "Tracked time"}</span>
+                <strong>{formatDurationSummary(selectedTask.actualTrackedSeconds)}</strong>
+              </div>
+              {selectedTask.isStudyProblem ? (
+                <div className="focus-meta-row">
+                  <span>Times completed</span>
+                  <strong>{selectedTask.timesCompleted}</strong>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -1026,6 +1053,13 @@ export const PomodoroPanel = ({
             </label>
 
             <div className="modal-footer procrastination-note-actions">
+              <button
+                className="danger-button"
+                onClick={cancelInterruption}
+                type="button"
+              >
+                Discard
+              </button>
               <button
                 className="ghost-button"
                 onClick={() => {
