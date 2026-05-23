@@ -9,6 +9,7 @@ import type {
   TaskFieldValue
 } from "../../custom-fields/domain/custom-fields.types";
 import type {
+  AiWorkRecord,
   BreakRecord,
   InterruptionRecord,
   PomodoroSession,
@@ -52,11 +53,13 @@ export interface BoardViewState {
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
   interruptionRecords: InterruptionRecord[];
+  aiWorkRecords: AiWorkRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
   archivedInterruptionRecords: InterruptionRecord[];
+  archivedAiWorkRecords: AiWorkRecord[];
   selectedTaskId: TaskId | null;
 }
 
@@ -139,6 +142,7 @@ const buildArchivedDeletionState = (
   | "archivedBreakRecords"
   | "archivedProcrastinationRecords"
   | "archivedInterruptionRecords"
+  | "archivedAiWorkRecords"
 > => {
   const deletedCompletedTasks = current.tasks.filter(
     (task) => deletedTaskIds.has(task.id) && task.completedAt !== null
@@ -151,7 +155,8 @@ const buildArchivedDeletionState = (
       archivedPomodoroSessions: current.archivedPomodoroSessions,
       archivedBreakRecords: current.archivedBreakRecords,
       archivedProcrastinationRecords: current.archivedProcrastinationRecords,
-      archivedInterruptionRecords: current.archivedInterruptionRecords
+      archivedInterruptionRecords: current.archivedInterruptionRecords,
+      archivedAiWorkRecords: current.archivedAiWorkRecords
     };
   }
 
@@ -187,6 +192,7 @@ const buildArchivedDeletionState = (
           projectColor: project?.color ?? null,
           pomodoroCount: task.pomodoroCount,
           actualTrackedSeconds: task.actualTrackedSeconds,
+          aiTrackedSeconds: task.aiTrackedSeconds,
           isStudyProblem: task.isStudyProblem,
           studyPlatform: task.studyPlatform,
           studyUrl: task.studyUrl,
@@ -217,6 +223,10 @@ const buildArchivedDeletionState = (
       ...current.interruptionRecords.filter((record) =>
         deletedCompletedTaskIds.has(record.taskId)
       )
+    ],
+    archivedAiWorkRecords: [
+      ...current.archivedAiWorkRecords,
+      ...current.aiWorkRecords.filter((record) => deletedCompletedTaskIds.has(record.taskId))
     ]
   };
 };
@@ -254,6 +264,9 @@ const buildTaskDeletionState = (
       (record) => !deletedTaskIds.has(record.taskId)
     ),
     interruptionRecords: current.interruptionRecords.filter(
+      (record) => !deletedTaskIds.has(record.taskId)
+    ),
+    aiWorkRecords: current.aiWorkRecords.filter(
       (record) => !deletedTaskIds.has(record.taskId)
     ),
     ...archivedDeletionState
@@ -298,6 +311,43 @@ const ensureInDevColumnState = (
     inDevColumnId: newColumn.id
   };
 };
+
+const isTaskProjectStudyProject = (
+  current: BoardViewState,
+  taskProjectId: TaskProjectId | null
+): boolean =>
+  taskProjectId !== null &&
+  (current.taskProjects.find((project) => project.id === taskProjectId)?.isStudyProject ??
+    false);
+
+const getTaskLocationStudyProjectState = (
+  current: BoardViewState,
+  taskProjectId: TaskProjectId | null,
+  taskCollectionId: TaskCollectionId | null
+): boolean => {
+  if (isTaskProjectStudyProject(current, taskProjectId)) {
+    return true;
+  }
+
+  if (taskCollectionId === null) {
+    return false;
+  }
+
+  const collection =
+    current.taskCollections.find((candidate) => candidate.id === taskCollectionId) ?? null;
+
+  return isTaskProjectStudyProject(current, collection?.taskProjectId ?? null);
+};
+
+const getStudyProblemFlagForLocation = (
+  current: BoardViewState,
+  taskProjectId: TaskProjectId | null,
+  taskCollectionId: TaskCollectionId | null,
+  fallbackStudyProblem: boolean
+): boolean =>
+  getTaskLocationStudyProjectState(current, taskProjectId, taskCollectionId)
+    ? true
+    : fallbackStudyProblem;
 
 const shiftMatchingTaskDueDates = (
   current: BoardViewState,
@@ -361,6 +411,8 @@ const toBoardViewState = (
   archivedProcrastinationRecords: snapshot.archivedProcrastinationRecords ?? [],
   interruptionRecords: snapshot.interruptionRecords ?? [],
   archivedInterruptionRecords: snapshot.archivedInterruptionRecords ?? [],
+  aiWorkRecords: snapshot.aiWorkRecords ?? [],
+  archivedAiWorkRecords: snapshot.archivedAiWorkRecords ?? [],
   selectedTaskId: selectedTaskId ?? snapshot.tasks[0]?.id ?? null
 });
 
@@ -377,11 +429,13 @@ const toBoardSnapshot = (state: BoardViewState): BoardSnapshot => ({
   breakRecords: state.breakRecords,
   procrastinationRecords: state.procrastinationRecords,
   interruptionRecords: state.interruptionRecords,
+  aiWorkRecords: state.aiWorkRecords,
   archivedCompletedTasks: state.archivedCompletedTasks,
   archivedPomodoroSessions: state.archivedPomodoroSessions,
   archivedBreakRecords: state.archivedBreakRecords,
   archivedProcrastinationRecords: state.archivedProcrastinationRecords,
-  archivedInterruptionRecords: state.archivedInterruptionRecords
+  archivedInterruptionRecords: state.archivedInterruptionRecords,
+  archivedAiWorkRecords: state.archivedAiWorkRecords
 });
 
 const getApplicableFieldDefinitions = (
@@ -519,7 +573,7 @@ export const useBoardState = () => {
         selectedTaskId: taskId
       }));
     },
-    createTaskProject: (name: string) => {
+    createTaskProject: (name: string, isStudyProject = false) => {
       const trimmedName = name.trim();
 
       if (trimmedName.length === 0) {
@@ -533,6 +587,7 @@ export const useBoardState = () => {
           boardId: current.board.id,
           name: trimmedName,
           color: getTaskCollectionColor(current.taskProjects.length),
+          isStudyProject,
           orderIndex: current.taskProjects.length,
           createdAt: now,
           updatedAt: now
@@ -561,8 +616,45 @@ export const useBoardState = () => {
                 updatedAt: toIsoNow()
               }
             : project
-        )
+          )
       }));
+    },
+    updateTaskProjectStudyMode: (taskProjectId: TaskProjectId, isStudyProject: boolean) => {
+      updateState((current) => {
+        if (!current.taskProjects.some((project) => project.id === taskProjectId)) {
+          return current;
+        }
+
+        const updatedAt = toIsoNow();
+        const projectCollectionIds = new Set(
+          current.taskCollections
+            .filter((collection) => collection.taskProjectId === taskProjectId)
+            .map((collection) => collection.id)
+        );
+
+        return {
+          ...current,
+          taskProjects: current.taskProjects.map((project) =>
+            project.id === taskProjectId
+              ? {
+                  ...project,
+                  isStudyProject,
+                  updatedAt
+                }
+              : project
+          ),
+          tasks: current.tasks.map((task) =>
+            task.taskProjectId === taskProjectId ||
+            (task.taskCollectionId !== null && projectCollectionIds.has(task.taskCollectionId))
+              ? {
+                  ...task,
+                  isStudyProblem: isStudyProject,
+                  updatedAt
+                }
+              : task
+          )
+        };
+      });
     },
     createTaskCollection: (name: string, taskProjectId: TaskProjectId) => {
       const trimmedName = name.trim();
@@ -829,6 +921,7 @@ export const useBoardState = () => {
                 boardId: current.board.id,
                 name: projectInput.name,
                 color: getTaskCollectionColor(nextProjects.length),
+                isStudyProject: false,
                 orderIndex: nextProjects.length,
                 createdAt: now,
                 updatedAt: now
@@ -918,6 +1011,7 @@ export const useBoardState = () => {
                 estimatedCompletionDate: taskInput.estimatedCompletionDate,
                 estimatedPomodoros: taskInput.estimatedPomodoros,
                 actualTrackedSeconds: 0,
+                aiTrackedSeconds: 0,
                 pomodoroCount: 0,
                 isStudyProblem: false,
                 studyPlatform: "",
@@ -1006,6 +1100,9 @@ export const useBoardState = () => {
             (record) => !deletedTaskIds.has(record.taskId)
           ),
           interruptionRecords: current.interruptionRecords.filter(
+            (record) => !deletedTaskIds.has(record.taskId)
+          ),
+          aiWorkRecords: current.aiWorkRecords.filter(
             (record) => !deletedTaskIds.has(record.taskId)
           ),
           selectedTaskId:
@@ -1105,6 +1202,12 @@ export const useBoardState = () => {
         const taskCountInColumn = current.tasks.filter(
           (task) => task.columnId === columnId
         ).length;
+        const nextIsStudyProblem = getStudyProblemFlagForLocation(
+          current,
+          taskProjectId,
+          taskCollectionId,
+          isStudyProblem
+        );
 
         const newTask: Task = {
           id: createId("task") as TaskId,
@@ -1119,8 +1222,9 @@ export const useBoardState = () => {
           estimatedCompletionDate,
           estimatedPomodoros: Math.max(0, Math.floor(estimatedPomodoros)),
           actualTrackedSeconds: 0,
+          aiTrackedSeconds: 0,
           pomodoroCount: 0,
-          isStudyProblem,
+          isStudyProblem: nextIsStudyProblem,
           studyPlatform: studyPlatform.trim(),
           studyUrl: studyUrl.trim(),
           studyDifficulty,
@@ -1152,6 +1256,8 @@ export const useBoardState = () => {
           return current;
         }
 
+        const updatedAt = toIsoNow();
+
         return {
           ...current,
           tasks: current.tasks.map((task) => {
@@ -1172,9 +1278,11 @@ export const useBoardState = () => {
                     (collection) => collection.taskProjectId === taskProjectId
                   );
             const nextCollectionId =
-              currentCollection && currentCollection.taskProjectId === taskProjectId
-                ? currentCollection.id
-                : projectCollections[0]?.id ?? task.taskCollectionId;
+              taskProjectId === null
+                ? null
+                : currentCollection && currentCollection.taskProjectId === taskProjectId
+                  ? currentCollection.id
+                  : projectCollections[0]?.id ?? null;
 
             if (taskProjectId !== null && projectCollections.length === 0) {
               return task;
@@ -1183,8 +1291,14 @@ export const useBoardState = () => {
             return {
               ...task,
               taskProjectId,
-              taskCollectionId: nextCollectionId ?? null,
-              updatedAt: toIsoNow()
+              taskCollectionId: nextCollectionId,
+              isStudyProblem: getStudyProblemFlagForLocation(
+                current,
+                taskProjectId,
+                nextCollectionId,
+                false
+              ),
+              updatedAt
             };
           })
         };
@@ -1202,16 +1316,28 @@ export const useBoardState = () => {
           return current;
         }
 
+        const updatedAt = toIsoNow();
+
         return {
           ...current,
           tasks: current.tasks.map((task) =>
             task.id === taskId
-              ? {
-                  ...task,
-                  taskProjectId: matchedCollection?.taskProjectId ?? task.taskProjectId,
-                  taskCollectionId,
-                  updatedAt: toIsoNow()
-                }
+              ? (() => {
+                  const nextProjectId = matchedCollection?.taskProjectId ?? task.taskProjectId;
+
+                  return {
+                    ...task,
+                    taskProjectId: nextProjectId,
+                    taskCollectionId,
+                    isStudyProblem: getStudyProblemFlagForLocation(
+                      current,
+                      nextProjectId,
+                      taskCollectionId,
+                      taskCollectionId === null ? task.isStudyProblem : false
+                    ),
+                    updatedAt
+                  };
+                })()
               : task
           )
         };
@@ -1219,6 +1345,10 @@ export const useBoardState = () => {
     },
     moveTask: (taskId: TaskId, targetColumnId: ColumnId) => {
       updateState((current) => {
+        const movedAt = toIsoNow();
+        const isTargetCompletedColumn = current.columns.some(
+          (column) => column.id === targetColumnId && isCompletedColumnName(column.name)
+        );
         const nextTasks = current.tasks.map((task) => {
           if (task.id !== taskId) {
             return task;
@@ -1232,12 +1362,8 @@ export const useBoardState = () => {
             ...task,
             columnId: targetColumnId,
             orderIndex: targetIndex,
-            completedAt: current.columns.some(
-              (column) => column.id === targetColumnId && isCompletedColumnName(column.name)
-            )
-              ? toIsoNow()
-              : task.completedAt,
-            updatedAt: toIsoNow()
+            completedAt: isTargetCompletedColumn ? task.completedAt ?? movedAt : null,
+            updatedAt: movedAt
           };
         });
 
@@ -1259,6 +1385,7 @@ export const useBoardState = () => {
     },
     ensureTaskInDev: (taskId: TaskId) => {
       updateState((current) => {
+        const movedAt = toIsoNow();
         const { columns, inDevColumnId } = ensureInDevColumnState(current);
         const nextTasks = current.tasks.map((task) => {
           if (task.id !== taskId) {
@@ -1274,7 +1401,8 @@ export const useBoardState = () => {
             ...task,
             columnId: inDevColumnId,
             orderIndex: targetIndex,
-            updatedAt: toIsoNow()
+            completedAt: null,
+            updatedAt: movedAt
           };
         });
 
@@ -1575,6 +1703,73 @@ export const useBoardState = () => {
         ]
       }));
     },
+    recordCompletedStudySession: (
+      taskId: TaskId,
+      actualDurationSeconds: number,
+      startedAt: string,
+      endedAt: string
+    ) => {
+      updateState((current) => ({
+        ...current,
+        tasks: current.tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                actualTrackedSeconds: task.actualTrackedSeconds + actualDurationSeconds,
+                timesCompleted: task.timesCompleted + 1,
+                studyStatus: task.isStudyProblem ? "solved" : task.studyStatus,
+                updatedAt: endedAt
+              }
+            : task
+        ),
+        pomodoroSessions: [
+          ...current.pomodoroSessions,
+          {
+            id: createId("session") as PomodoroSession["id"],
+            taskId,
+            phaseType: "work",
+            plannedDurationSeconds: 0,
+            actualDurationSeconds,
+            status: "completed",
+            startedAt,
+            endedAt
+          }
+        ]
+      }));
+    },
+    recordAttemptedStudySession: (
+      taskId: TaskId,
+      actualDurationSeconds: number,
+      startedAt: string,
+      endedAt: string
+    ) => {
+      updateState((current) => ({
+        ...current,
+        tasks: current.tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                actualTrackedSeconds: task.actualTrackedSeconds + actualDurationSeconds,
+                studyStatus: task.isStudyProblem ? "attempted" : task.studyStatus,
+                updatedAt: endedAt
+              }
+            : task
+        ),
+        pomodoroSessions: [
+          ...current.pomodoroSessions,
+          {
+            id: createId("session") as PomodoroSession["id"],
+            taskId,
+            phaseType: "work",
+            plannedDurationSeconds: 0,
+            actualDurationSeconds,
+            status: "abandoned",
+            startedAt,
+            endedAt
+          }
+        ]
+      }));
+    },
     recordInterruptedPomodoro: (
       taskId: TaskId,
       plannedDurationSeconds: number,
@@ -1672,6 +1867,35 @@ export const useBoardState = () => {
             taskId,
             actualDurationSeconds,
             reason,
+            startedAt,
+            endedAt
+          }
+        ]
+      }));
+    },
+    recordAiWork: (
+      taskId: TaskId,
+      actualDurationSeconds: number,
+      startedAt: string,
+      endedAt: string
+    ) => {
+      updateState((current) => ({
+        ...current,
+        tasks: current.tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                aiTrackedSeconds: task.aiTrackedSeconds + actualDurationSeconds,
+                updatedAt: endedAt
+              }
+            : task
+        ),
+        aiWorkRecords: [
+          ...current.aiWorkRecords,
+          {
+            id: createId("ai_work") as AiWorkRecord["id"],
+            taskId,
+            actualDurationSeconds,
             startedAt,
             endedAt
           }

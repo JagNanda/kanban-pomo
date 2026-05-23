@@ -13,6 +13,7 @@ export interface TaskRow {
   estimated_completion_date: string | null;
   estimated_pomodoros: number;
   actual_tracked_seconds: number;
+  ai_tracked_seconds: number;
   pomodoro_count: number;
   is_study_problem: number;
   study_platform: string;

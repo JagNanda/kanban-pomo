@@ -109,6 +109,7 @@ const migrations: DatabaseMigration[] = [
           board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
           name TEXT NOT NULL,
           color TEXT NOT NULL,
+          is_study_project INTEGER NOT NULL DEFAULT 0,
           order_index INTEGER NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
@@ -138,6 +139,7 @@ const migrations: DatabaseMigration[] = [
           estimated_completion_date TEXT,
           estimated_pomodoros INTEGER NOT NULL DEFAULT 0,
           actual_tracked_seconds INTEGER NOT NULL,
+          ai_tracked_seconds INTEGER NOT NULL DEFAULT 0,
           pomodoro_count INTEGER NOT NULL,
           is_study_problem INTEGER NOT NULL DEFAULT 0,
           study_platform TEXT NOT NULL DEFAULT '',
@@ -217,6 +219,14 @@ const migrations: DatabaseMigration[] = [
           ended_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS ai_work_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          actual_duration_seconds INTEGER NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS archived_completed_tasks (
           id TEXT PRIMARY KEY,
           original_task_id TEXT NOT NULL,
@@ -230,6 +240,7 @@ const migrations: DatabaseMigration[] = [
           project_color TEXT,
           pomodoro_count INTEGER NOT NULL,
           actual_tracked_seconds INTEGER NOT NULL,
+          ai_tracked_seconds INTEGER NOT NULL DEFAULT 0,
           is_study_problem INTEGER NOT NULL DEFAULT 0,
           study_platform TEXT NOT NULL DEFAULT '',
           study_url TEXT NOT NULL DEFAULT '',
@@ -280,6 +291,14 @@ const migrations: DatabaseMigration[] = [
           ended_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS archived_ai_work_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          actual_duration_seconds INTEGER NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS app_settings (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -294,6 +313,7 @@ const migrations: DatabaseMigration[] = [
       addColumnIfMissing(db, "tasks", "description", "TEXT NOT NULL DEFAULT ''");
       addColumnIfMissing(db, "tasks", "priority", "TEXT NOT NULL DEFAULT 'medium'");
       addColumnIfMissing(db, "tasks", "estimated_pomodoros", "INTEGER NOT NULL DEFAULT 0");
+      addColumnIfMissing(db, "tasks", "ai_tracked_seconds", "INTEGER NOT NULL DEFAULT 0");
       addColumnIfMissing(db, "tasks", "task_collection_id", "TEXT");
       addColumnIfMissing(db, "tasks", "task_project_id", "TEXT");
       addColumnIfMissing(db, "tasks", "completed_at", "TEXT");
@@ -408,6 +428,54 @@ const migrations: DatabaseMigration[] = [
         db,
         "archived_completed_tasks",
         "times_completed",
+        "INTEGER NOT NULL DEFAULT 0"
+      );
+    }
+  },
+  {
+    version: 6,
+    name: "ai_work_tracking",
+    up: (db) => {
+      addColumnIfMissing(db, "tasks", "ai_tracked_seconds", "INTEGER NOT NULL DEFAULT 0");
+      addColumnIfMissing(
+        db,
+        "archived_completed_tasks",
+        "ai_tracked_seconds",
+        "INTEGER NOT NULL DEFAULT 0"
+      );
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ai_work_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          actual_duration_seconds INTEGER NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS archived_ai_work_records (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          actual_duration_seconds INTEGER NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_work_records_started_at
+          ON ai_work_records(started_at);
+        CREATE INDEX IF NOT EXISTS idx_archived_ai_work_records_started_at
+          ON archived_ai_work_records(started_at);
+      `);
+    }
+  },
+  {
+    version: 7,
+    name: "study_projects",
+    up: (db) => {
+      addColumnIfMissing(
+        db,
+        "task_projects",
+        "is_study_project",
         "INTEGER NOT NULL DEFAULT 0"
       );
     }

@@ -3,6 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import {
   demoBoardRow,
+  demoAiWorkRecordRows,
   demoBreakRecordRows,
   demoColumnRows,
   demoFieldDefinitionRows,
@@ -35,12 +36,12 @@ const insertColumn = `
 const insertTask = `
   INSERT INTO tasks (
     id, board_id, column_id, task_project_id, task_collection_id, title, description, priority, order_index, estimated_completion_date,
-    estimated_pomodoros, actual_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
+    estimated_pomodoros, actual_tracked_seconds, ai_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
     study_topic, study_status, times_completed, completed_at, created_at, updated_at
   )
   VALUES (
     @id, @board_id, @column_id, @task_project_id, @task_collection_id, @title, @description, @priority, @order_index, @estimated_completion_date,
-    @estimated_pomodoros, @actual_tracked_seconds, @pomodoro_count, @is_study_problem, @study_platform, @study_url, @study_difficulty,
+    @estimated_pomodoros, @actual_tracked_seconds, @ai_tracked_seconds, @pomodoro_count, @is_study_problem, @study_platform, @study_url, @study_difficulty,
     @study_topic, @study_status, @times_completed, @completed_at, @created_at, @updated_at
   )
 `;
@@ -51,8 +52,8 @@ const insertTaskCollection = `
 `;
 
 const insertTaskProject = `
-  INSERT INTO task_projects (id, board_id, name, color, order_index, created_at, updated_at)
-  VALUES (@id, @board_id, @name, @color, @order_index, @created_at, @updated_at)
+  INSERT INTO task_projects (id, board_id, name, color, is_study_project, order_index, created_at, updated_at)
+  VALUES (@id, @board_id, @name, @color, @is_study_project, @order_index, @created_at, @updated_at)
 `;
 
 const insertFieldDefinition = `
@@ -114,17 +115,26 @@ const insertInterruptionRecord = `
   )
 `;
 
+const insertAiWorkRecord = `
+  INSERT INTO ai_work_records (
+    id, task_id, actual_duration_seconds, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @started_at, @ended_at
+  )
+`;
+
 const insertArchivedCompletedTask = `
   INSERT INTO archived_completed_tasks (
     id, original_task_id, title, priority, estimated_completion_date, completed_at,
     collection_name, collection_color, project_name, project_color, pomodoro_count,
-    actual_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
+    actual_tracked_seconds, ai_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
     study_topic, study_status, times_completed, deleted_at
   )
   VALUES (
     @id, @original_task_id, @title, @priority, @estimated_completion_date, @completed_at,
     @collection_name, @collection_color, @project_name, @project_color, @pomodoro_count,
-    @actual_tracked_seconds, @is_study_problem, @study_platform, @study_url, @study_difficulty,
+    @actual_tracked_seconds, @ai_tracked_seconds, @is_study_problem, @study_platform, @study_url, @study_difficulty,
     @study_topic, @study_status, @times_completed, @deleted_at
   )
 `;
@@ -166,6 +176,15 @@ const insertArchivedInterruptionRecord = `
   )
   VALUES (
     @id, @task_id, @actual_duration_seconds, @reason, @started_at, @ended_at
+  )
+`;
+
+const insertArchivedAiWorkRecord = `
+  INSERT INTO archived_ai_work_records (
+    id, task_id, actual_duration_seconds, started_at, ended_at
+  )
+  VALUES (
+    @id, @task_id, @actual_duration_seconds, @started_at, @ended_at
   )
 `;
 
@@ -216,7 +235,7 @@ export class AppDatabase {
     }>;
     const taskProjects = this.db
       .prepare(
-        `SELECT id, board_id, name, color, order_index, created_at, updated_at
+        `SELECT id, board_id, name, color, is_study_project, order_index, created_at, updated_at
          FROM task_projects
          ORDER BY order_index ASC, created_at ASC`
       )
@@ -225,6 +244,7 @@ export class AppDatabase {
       board_id: string;
       name: string;
       color: string;
+      is_study_project: number;
       order_index: number;
       created_at: string;
       updated_at: string;
@@ -248,7 +268,7 @@ export class AppDatabase {
     const tasks = this.db
       .prepare(
         `SELECT id, board_id, column_id, task_project_id, task_collection_id, title, description, priority, order_index, estimated_completion_date,
-                estimated_pomodoros, actual_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
+                estimated_pomodoros, actual_tracked_seconds, ai_tracked_seconds, pomodoro_count, is_study_problem, study_platform, study_url, study_difficulty,
                 study_topic, study_status, times_completed, completed_at, created_at, updated_at
          FROM tasks
          ORDER BY column_id ASC, order_index ASC`
@@ -266,6 +286,7 @@ export class AppDatabase {
       estimated_completion_date: string | null;
       estimated_pomodoros: number;
       actual_tracked_seconds: number;
+      ai_tracked_seconds: number;
       pomodoro_count: number;
       is_study_problem: number;
       study_platform: string;
@@ -378,11 +399,24 @@ export class AppDatabase {
       started_at: string;
       ended_at: string;
     }>;
+    const aiWorkRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, started_at, ended_at
+         FROM ai_work_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      started_at: string;
+      ended_at: string;
+    }>;
     const archivedCompletedTasks = this.db
       .prepare(
         `SELECT id, original_task_id, title, priority, estimated_completion_date, completed_at,
                 collection_name, collection_color, project_name, project_color, pomodoro_count,
-                actual_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
+                actual_tracked_seconds, ai_tracked_seconds, is_study_problem, study_platform, study_url, study_difficulty,
                 study_topic, study_status, times_completed, deleted_at
          FROM archived_completed_tasks
          ORDER BY completed_at DESC, deleted_at DESC`
@@ -400,6 +434,7 @@ export class AppDatabase {
       project_color: string | null;
       pomodoro_count: number;
       actual_tracked_seconds: number;
+      ai_tracked_seconds: number;
       is_study_problem: number;
       study_platform: string;
       study_url: string;
@@ -471,6 +506,19 @@ export class AppDatabase {
       started_at: string;
       ended_at: string;
     }>;
+    const archivedAiWorkRecords = this.db
+      .prepare(
+        `SELECT id, task_id, actual_duration_seconds, started_at, ended_at
+         FROM archived_ai_work_records
+         ORDER BY started_at DESC`
+      )
+      .all() as Array<{
+      id: string;
+      task_id: string;
+      actual_duration_seconds: number;
+      started_at: string;
+      ended_at: string;
+    }>;
 
     return {
       board: {
@@ -493,6 +541,7 @@ export class AppDatabase {
         boardId: row.board_id as BoardSnapshot["taskProjects"][number]["boardId"],
         name: row.name,
         color: row.color,
+        isStudyProject: Boolean(row.is_study_project),
         orderIndex: row.order_index,
         createdAt: row.created_at,
         updatedAt: row.updated_at
@@ -520,6 +569,7 @@ export class AppDatabase {
         estimatedCompletionDate: row.estimated_completion_date as string | null,
         estimatedPomodoros: row.estimated_pomodoros as number,
         actualTrackedSeconds: row.actual_tracked_seconds as number,
+        aiTrackedSeconds: row.ai_tracked_seconds as number,
         pomodoroCount: row.pomodoro_count as number,
         isStudyProblem: Boolean(row.is_study_problem),
         studyPlatform: row.study_platform as string,
@@ -623,6 +673,13 @@ export class AppDatabase {
         startedAt: row.started_at,
         endedAt: row.ended_at
       })),
+      aiWorkRecords: aiWorkRecords.map((row) => ({
+        id: row.id as BoardSnapshot["aiWorkRecords"][number]["id"],
+        taskId: row.task_id as BoardSnapshot["aiWorkRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
+      })),
       archivedCompletedTasks: archivedCompletedTasks.map((row) => ({
         id: row.id as BoardSnapshot["archivedCompletedTasks"][number]["id"],
         originalTaskId:
@@ -637,6 +694,7 @@ export class AppDatabase {
         projectColor: row.project_color,
         pomodoroCount: row.pomodoro_count,
         actualTrackedSeconds: row.actual_tracked_seconds,
+        aiTrackedSeconds: row.ai_tracked_seconds,
         isStudyProblem: Boolean(row.is_study_problem),
         studyPlatform: row.study_platform,
         studyUrl: row.study_url,
@@ -683,6 +741,13 @@ export class AppDatabase {
         reason: row.reason,
         startedAt: row.started_at,
         endedAt: row.ended_at
+      })),
+      archivedAiWorkRecords: archivedAiWorkRecords.map((row) => ({
+        id: row.id as BoardSnapshot["archivedAiWorkRecords"][number]["id"],
+        taskId: row.task_id as BoardSnapshot["archivedAiWorkRecords"][number]["taskId"],
+        actualDurationSeconds: row.actual_duration_seconds,
+        startedAt: row.started_at,
+        endedAt: row.ended_at
       }))
     };
   }
@@ -690,11 +755,13 @@ export class AppDatabase {
   public saveBoardSnapshot(snapshot: BoardSnapshot): void {
     const transaction = this.db.transaction((currentSnapshot: BoardSnapshot) => {
       this.db.prepare("DELETE FROM archived_interruption_records").run();
+      this.db.prepare("DELETE FROM archived_ai_work_records").run();
       this.db.prepare("DELETE FROM archived_procrastination_records").run();
       this.db.prepare("DELETE FROM archived_break_records").run();
       this.db.prepare("DELETE FROM archived_pomodoro_sessions").run();
       this.db.prepare("DELETE FROM archived_completed_tasks").run();
       this.db.prepare("DELETE FROM interruption_records").run();
+      this.db.prepare("DELETE FROM ai_work_records").run();
       this.db.prepare("DELETE FROM procrastination_records").run();
       this.db.prepare("DELETE FROM break_records").run();
       this.db.prepare("DELETE FROM pomodoro_sessions").run();
@@ -736,6 +803,7 @@ export class AppDatabase {
           board_id: taskProject.boardId,
           name: taskProject.name,
           color: taskProject.color,
+          is_study_project: Number(taskProject.isStudyProject),
           order_index: taskProject.orderIndex,
           created_at: taskProject.createdAt,
           updated_at: taskProject.updatedAt
@@ -771,6 +839,7 @@ export class AppDatabase {
           estimated_completion_date: task.estimatedCompletionDate,
           estimated_pomodoros: task.estimatedPomodoros,
           actual_tracked_seconds: task.actualTrackedSeconds,
+          ai_tracked_seconds: task.aiTrackedSeconds,
           pomodoro_count: task.pomodoroCount,
           is_study_problem: Number(task.isStudyProblem),
           study_platform: task.studyPlatform,
@@ -874,6 +943,17 @@ export class AppDatabase {
         });
       });
 
+      const insertAiWorkRecordStatement = this.db.prepare(insertAiWorkRecord);
+      currentSnapshot.aiWorkRecords.forEach((record) => {
+        insertAiWorkRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
       const insertArchivedCompletedTaskStatement = this.db.prepare(insertArchivedCompletedTask);
       currentSnapshot.archivedCompletedTasks.forEach((task) => {
         insertArchivedCompletedTaskStatement.run({
@@ -889,6 +969,7 @@ export class AppDatabase {
           project_color: task.projectColor,
           pomodoro_count: task.pomodoroCount,
           actual_tracked_seconds: task.actualTrackedSeconds,
+          ai_tracked_seconds: task.aiTrackedSeconds,
           is_study_problem: Number(task.isStudyProblem),
           study_platform: task.studyPlatform,
           study_url: task.studyUrl,
@@ -953,6 +1034,17 @@ export class AppDatabase {
           task_id: record.taskId,
           actual_duration_seconds: record.actualDurationSeconds,
           reason: record.reason,
+          started_at: record.startedAt,
+          ended_at: record.endedAt
+        });
+      });
+
+      const insertArchivedAiWorkRecordStatement = this.db.prepare(insertArchivedAiWorkRecord);
+      currentSnapshot.archivedAiWorkRecords.forEach((record) => {
+        insertArchivedAiWorkRecordStatement.run({
+          id: record.id,
+          task_id: record.taskId,
+          actual_duration_seconds: record.actualDurationSeconds,
           started_at: record.startedAt,
           ended_at: record.endedAt
         });
@@ -1046,6 +1138,9 @@ export class AppDatabase {
       demoInterruptionRecordRows.forEach((row) =>
         insertInterruptionRecordStatement.run(row)
       );
+
+      const insertAiWorkRecordStatement = this.db.prepare(insertAiWorkRecord);
+      demoAiWorkRecordRows.forEach((row) => insertAiWorkRecordStatement.run(row));
 
       this.savePomodoroConfig(defaultPomodoroConfig);
     });

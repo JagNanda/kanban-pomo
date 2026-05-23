@@ -2,7 +2,14 @@ import type { CSSProperties } from "react";
 
 interface SegmentedTimerRingProps {
   progress: number;
-  tone: "work" | "short_break" | "long_break" | "procrastination" | "interruption" | "idle";
+  tone:
+    | "work"
+    | "short_break"
+    | "long_break"
+    | "procrastination"
+    | "interruption"
+    | "ai_work"
+    | "idle";
 }
 
 const totalSegments = 60;

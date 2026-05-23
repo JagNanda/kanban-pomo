@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { Column, ColumnId } from "../../columns/domain/column.types";
 import type {
   FieldDefinition,
@@ -10,6 +11,7 @@ import type {
 import type { CreateTaskInput } from "../../board/application/useBoardState";
 import type { PomodoroSession } from "../../pomodoro/domain/pomodoro.types";
 import { CalendarInput } from "../../../shared/components/CalendarInput";
+import { formatDurationSummary } from "../../../shared/lib/time";
 import {
   MARKDOWN_IMPORT_TEMPLATE,
   parseMarkdownImportDocument,
@@ -81,7 +83,18 @@ type ImportFeedback =
     }
   | null;
 
-type TaskSortKey = "title" | "status" | "priority" | "estimated" | "completed" | "dueDate";
+type TaskSortKey =
+  | "title"
+  | "status"
+  | "priority"
+  | "estimated"
+  | "completed"
+  | "dueDate"
+  | "studyPlatform"
+  | "studyDifficulty"
+  | "studyStatus"
+  | "timesCompleted"
+  | "studyTime";
 type TaskSortDirection = "asc" | "desc";
 
 interface TaskSortState {
@@ -128,8 +141,12 @@ interface TasksPageProps {
   onFocusTask: (taskId: TaskId) => void;
   actions: {
     selectTask: (taskId: TaskId) => void;
-    createTaskProject: (name: string) => void;
+    createTaskProject: (name: string, isStudyProject?: boolean) => void;
     renameTaskProject: (taskProjectId: TaskProjectId, name: string) => void;
+    updateTaskProjectStudyMode: (
+      taskProjectId: TaskProjectId,
+      isStudyProject: boolean
+    ) => void;
     createTaskCollection: (name: string, taskProjectId: TaskProjectId) => void;
     renameTaskCollection: (taskCollectionId: TaskCollectionId, name: string) => void;
     extendTaskProjectDueDates: (taskProjectId: TaskProjectId, dayCount: number) => void;
@@ -193,6 +210,26 @@ const getApplicableFieldDefinitions = (
     );
   });
 
+const getStudyViewProject = (
+  selectedView: TaskView,
+  taskProjectsById: Map<TaskProjectId, TaskProject>,
+  taskCollectionsById: Map<TaskCollectionId, TaskCollection>
+): TaskProject | null => {
+  if (selectedView.type === "project" || selectedView.type === "completed-project") {
+    return taskProjectsById.get(selectedView.projectId) ?? null;
+  }
+
+  if (selectedView.type === "collection" || selectedView.type === "completed-collection") {
+    const collection = taskCollectionsById.get(selectedView.collectionId) ?? null;
+
+    return collection?.taskProjectId
+      ? taskProjectsById.get(collection.taskProjectId) ?? null
+      : null;
+  }
+
+  return null;
+};
+
 const createDefaultTaskDraft = (columnId: ColumnId | ""): CreateTaskDraft => ({
   columnId,
   title: "",
@@ -210,6 +247,11 @@ const createDefaultTaskDraft = (columnId: ColumnId | ""): CreateTaskDraft => ({
   studyStatus: "unstarted",
   timesCompleted: ""
 });
+
+const buildTreePillStyle = (color: string): CSSProperties =>
+  ({
+    "--tasks-tree-accent": color
+  }) as CSSProperties;
 
 const toLocalDateKey = (value: Date): string => {
   const year = value.getFullYear();
@@ -236,6 +278,19 @@ const TASK_PRIORITY_RANK: Record<TaskPriority, number> = {
   low: 0,
   medium: 1,
   high: 2
+};
+
+const STUDY_DIFFICULTY_RANK: Record<NonNullable<Task["studyDifficulty"]>, number> = {
+  easy: 0,
+  medium: 1,
+  hard: 2
+};
+
+const STUDY_STATUS_RANK: Record<NonNullable<Task["studyStatus"]>, number> = {
+  unstarted: 0,
+  attempted: 1,
+  reviewing: 2,
+  solved: 3
 };
 
 const compareText = (left: string, right: string): number =>
@@ -438,6 +493,7 @@ export const TasksPage = ({
 }: TasksPageProps): JSX.Element => {
   const [modalState, setModalState] = useState<ModalState>(null);
   const [projectName, setProjectName] = useState("");
+  const [projectIsStudyProject, setProjectIsStudyProject] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<TaskProjectId | null>(null);
   const [collectionName, setCollectionName] = useState("");
   const [collectionProjectId, setCollectionProjectId] = useState<TaskProjectId | null>(null);
@@ -590,6 +646,15 @@ export const TasksPage = ({
   const availableDraftCollections = taskCollections.filter(
     (collection) => collection.taskProjectId === draft.taskProjectId
   );
+  const selectedStudyViewProject = getStudyViewProject(
+    selectedView,
+    taskProjectsById,
+    taskCollectionsById
+  );
+  const isStudyTableView = selectedStudyViewProject?.isStudyProject ?? false;
+  const draftProject =
+    draft.taskProjectId === "" ? null : taskProjectsById.get(draft.taskProjectId) ?? null;
+  const isDraftStudyProject = draftProject?.isStudyProject ?? false;
   const dueDateShiftScope = useMemo(() => {
     if (!dueDateShiftTarget) {
       return null;
@@ -730,7 +795,17 @@ export const TasksPage = ({
           ? taskCollectionsById.get(task.taskCollectionId)?.name ?? ""
           : "";
 
-      return [task.title, task.description, columnName, projectName, collectionName]
+      return [
+        task.title,
+        task.description,
+        columnName,
+        projectName,
+        collectionName,
+        task.studyPlatform,
+        task.studyTopic,
+        task.studyDifficulty ?? "",
+        task.studyStatus
+      ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery);
@@ -780,6 +855,28 @@ export const TasksPage = ({
             taskSort.direction
           );
         }
+        case "studyPlatform": {
+          return directionMultiplier * compareText(left.studyPlatform, right.studyPlatform);
+        }
+        case "studyDifficulty": {
+          return (
+            directionMultiplier *
+            ((left.studyDifficulty ? STUDY_DIFFICULTY_RANK[left.studyDifficulty] : -1) -
+              (right.studyDifficulty ? STUDY_DIFFICULTY_RANK[right.studyDifficulty] : -1))
+          );
+        }
+        case "studyStatus": {
+          return (
+            directionMultiplier *
+            (STUDY_STATUS_RANK[left.studyStatus] - STUDY_STATUS_RANK[right.studyStatus])
+          );
+        }
+        case "timesCompleted": {
+          return directionMultiplier * (left.timesCompleted - right.timesCompleted);
+        }
+        case "studyTime": {
+          return directionMultiplier * (left.actualTrackedSeconds - right.actualTrackedSeconds);
+        }
       }
     });
   }, [columnsById, filteredVisibleTasks, taskSort]);
@@ -787,6 +884,14 @@ export const TasksPage = ({
   const openTaskModal = (taskId: TaskId): void => {
     actions.selectTask(taskId);
     setModalState("edit-task");
+  };
+
+  const openCreateProjectModal = (): void => {
+    setOpenTreeMenu(null);
+    setEditingProjectId(null);
+    setProjectName("");
+    setProjectIsStudyProject(false);
+    setModalState("create-project");
   };
 
   const openCreateTaskModal = (): void => {
@@ -817,7 +922,8 @@ export const TasksPage = ({
     setDraft({
       ...createDefaultTaskDraft(columns[0]?.id ?? ""),
       taskProjectId: preferredProject?.id ?? "",
-      taskCollectionId: preferredCollection?.id ?? ""
+      taskCollectionId: preferredCollection?.id ?? "",
+      isStudyProblem: preferredProject?.isStudyProject ?? false
     });
     setModalState("create-task");
   };
@@ -912,8 +1018,9 @@ export const TasksPage = ({
       return;
     }
 
-    actions.createTaskProject(trimmedName);
+    actions.createTaskProject(trimmedName, projectIsStudyProject);
     setProjectName("");
+    setProjectIsStudyProject(false);
     setModalState(null);
   };
 
@@ -924,9 +1031,17 @@ export const TasksPage = ({
       return;
     }
 
+    const project = taskProjectsById.get(editingProjectId);
+
     actions.renameTaskProject(editingProjectId, trimmedName);
+
+    if (project && project.isStudyProject !== projectIsStudyProject) {
+      actions.updateTaskProjectStudyMode(editingProjectId, projectIsStudyProject);
+    }
+
     setEditingProjectId(null);
     setProjectName("");
+    setProjectIsStudyProject(false);
     setModalState(null);
   };
 
@@ -972,7 +1087,7 @@ export const TasksPage = ({
       estimatedCompletionDate: draft.estimatedCompletionDate || null,
       estimatedPomodoros:
         draft.estimatedPomodoros.trim() === "" ? 0 : Number(draft.estimatedPomodoros),
-      isStudyProblem: draft.isStudyProblem,
+      isStudyProblem: isDraftStudyProject || draft.isStudyProblem,
       studyPlatform: draft.studyPlatform,
       studyUrl: draft.studyUrl,
       studyDifficulty: draft.studyDifficulty,
@@ -1092,6 +1207,7 @@ export const TasksPage = ({
 
     setEditingProjectId(taskProjectId);
     setProjectName(project.name);
+    setProjectIsStudyProject(project.isStudyProject);
     setModalState("edit-project");
   };
 
@@ -1225,26 +1341,32 @@ export const TasksPage = ({
       ? taskCollectionsById.get(selectedView.collectionId) ?? null
       : null;
 
-  useEffect(() => {
-    const focusTarget =
+  useLayoutEffect(() => {
+    const focusTargetRef =
       modalState === "create-project" || modalState === "edit-project"
-        ? projectNameInputRef.current
+        ? projectNameInputRef
         : modalState === "create-collection" || modalState === "edit-collection"
-          ? collectionNameInputRef.current
+          ? collectionNameInputRef
           : modalState === "extend-due-dates"
-            ? dueDateShiftInputRef.current
-          : null;
+            ? dueDateShiftInputRef
+            : null;
 
-    if (!focusTarget) {
+    if (!focusTargetRef) {
       return;
     }
 
-    const timerId = window.setTimeout(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const focusTarget = focusTargetRef.current;
+
+      if (!focusTarget) {
+        return;
+      }
+
       focusTarget.focus();
       focusTarget.select();
-    }, 0);
+    });
 
-    return () => window.clearTimeout(timerId);
+    return () => window.cancelAnimationFrame(frameId);
   }, [modalState]);
 
   useEffect(() => {
@@ -1271,7 +1393,9 @@ export const TasksPage = ({
       <aside className="tasks-sidebar-card">
         <div className="tasks-sidebar-section">
           <button
-            className={`tasks-sidebar-row${selectedView.type === "today" ? " is-active" : ""}`}
+            className={`tasks-sidebar-row tasks-sidebar-filter-row tasks-sidebar-filter-row--today${
+              selectedView.type === "today" ? " is-active" : ""
+            }`}
             onClick={() => setSelectedView({ type: "today" })}
             type="button"
           >
@@ -1282,7 +1406,9 @@ export const TasksPage = ({
             <strong>{counts.today}</strong>
           </button>
           <button
-            className={`tasks-sidebar-row${selectedView.type === "tomorrow" ? " is-active" : ""}`}
+            className={`tasks-sidebar-row tasks-sidebar-filter-row tasks-sidebar-filter-row--tomorrow${
+              selectedView.type === "tomorrow" ? " is-active" : ""
+            }`}
             onClick={() => setSelectedView({ type: "tomorrow" })}
             type="button"
           >
@@ -1293,7 +1419,9 @@ export const TasksPage = ({
             <strong>{counts.tomorrow}</strong>
           </button>
           <button
-            className={`tasks-sidebar-row${selectedView.type === "month" ? " is-active" : ""}`}
+            className={`tasks-sidebar-row tasks-sidebar-filter-row tasks-sidebar-filter-row--month${
+              selectedView.type === "month" ? " is-active" : ""
+            }`}
             onClick={() => setSelectedView({ type: "month" })}
             type="button"
           >
@@ -1304,7 +1432,9 @@ export const TasksPage = ({
             <strong>{counts.month}</strong>
           </button>
           <button
-            className={`tasks-sidebar-row${selectedView.type === "scheduled" ? " is-active" : ""}`}
+            className={`tasks-sidebar-row tasks-sidebar-filter-row tasks-sidebar-filter-row--scheduled${
+              selectedView.type === "scheduled" ? " is-active" : ""
+            }`}
             onClick={() => setSelectedView({ type: "scheduled" })}
             type="button"
           >
@@ -1315,7 +1445,9 @@ export const TasksPage = ({
             <strong>{counts.scheduled}</strong>
           </button>
           <button
-            className={`tasks-sidebar-row${selectedView.type === "all" ? " is-active" : ""}`}
+            className={`tasks-sidebar-row tasks-sidebar-filter-row tasks-sidebar-filter-row--all${
+              selectedView.type === "all" ? " is-active" : ""
+            }`}
             onClick={() => setSelectedView({ type: "all" })}
             type="button"
           >
@@ -1335,11 +1467,7 @@ export const TasksPage = ({
             <button
               aria-label="Create project"
               className="icon-button tasks-sidebar-add"
-              onClick={() => {
-                setEditingProjectId(null);
-                setProjectName("");
-                setModalState("create-project");
-              }}
+              onClick={openCreateProjectModal}
               type="button"
             >+</button>
           </div>
@@ -1364,46 +1492,50 @@ export const TasksPage = ({
                   >
                     {isProjectExpanded ? "-" : "+"}
                   </button>
-                  <button
-                    className={`tasks-sidebar-row tasks-sidebar-row--project${
+                  <div
+                    className={`tasks-tree-pill tasks-tree-pill--project${
                       selectedView.type === "project" && selectedView.projectId === project.id
                         ? " is-active"
                         : ""
-                    }`}
-                    onClick={() => setSelectedView({ type: "project", projectId: project.id })}
-                    type="button"
+                    }${isProjectMenuOpen ? " is-menu-open" : ""}`}
+                    style={buildTreePillStyle(project.color)}
                   >
-                    <span className="tasks-sidebar-row-label">
-                      <CollectionBadge color={project.color} compact name={project.name} />
-                    </span>
-                  </button>
-                  <div className={`tasks-tree-row-end${isProjectMenuOpen ? " is-menu-open" : ""}`}>
-                    <strong className="tasks-tree-row-count">
-                      {taskCountByProject.get(project.id) ?? 0}
-                    </strong>
-                    <div
-                      className={`tasks-tree-menu${isProjectMenuOpen ? " is-open" : ""}`}
-                      data-tree-menu-root="true"
+                    <button
+                      className="tasks-tree-pill-main"
+                      onClick={() => setSelectedView({ type: "project", projectId: project.id })}
+                      type="button"
                     >
-                      <button
-                        aria-label={`Open actions for ${project.name}`}
-                        className="icon-button icon-button--muted tasks-tree-menu-trigger"
-                        onClick={() =>
-                          setOpenTreeMenu((current) =>
-                            current?.type === "project" && current.projectId === project.id
-                              ? null
-                              : { type: "project", projectId: project.id }
-                          )
-                        }
-                        type="button"
+                      <span className="tasks-tree-pill-label">{project.name}</span>
+                      {project.isStudyProject ? (
+                        <span className="study-project-badge">Study Project</span>
+                      ) : null}
+                    </button>
+                    <div className="tasks-tree-pill-end">
+                      <strong className="tasks-tree-row-count">
+                        {taskCountByProject.get(project.id) ?? 0}
+                      </strong>
+                      <div
+                        className={`tasks-tree-menu${isProjectMenuOpen ? " is-open" : ""}`}
+                        data-tree-menu-root="true"
                       >
-                        <svg aria-hidden="true" viewBox="0 0 24 24">
-                          <circle cx="6" cy="12" fill="currentColor" r="1.8" />
-                          <circle cx="12" cy="12" fill="currentColor" r="1.8" />
-                          <circle cx="18" cy="12" fill="currentColor" r="1.8" />
-                        </svg>
-                      </button>
-
+                        <button
+                          aria-label={`Open actions for ${project.name}`}
+                          className="icon-button icon-button--muted tasks-tree-menu-trigger"
+                          onClick={() =>
+                            setOpenTreeMenu((current) =>
+                              current?.type === "project" && current.projectId === project.id
+                                ? null
+                                : { type: "project", projectId: project.id }
+                            )
+                          }
+                          type="button"
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <circle cx="6" cy="12" fill="currentColor" r="1.8" />
+                            <circle cx="12" cy="12" fill="currentColor" r="1.8" />
+                            <circle cx="18" cy="12" fill="currentColor" r="1.8" />
+                          </svg>
+                        </button>
                         {isProjectMenuOpen ? (
                           <div className="tasks-tree-context-menu" role="menu">
                             <button
@@ -1427,6 +1559,21 @@ export const TasksPage = ({
                               Extend due dates
                             </button>
                             <button
+                              className="tasks-tree-context-item"
+                              onClick={() => {
+                                setOpenTreeMenu(null);
+                                actions.updateTaskProjectStudyMode(
+                                  project.id,
+                                  !project.isStudyProject
+                                );
+                              }}
+                              type="button"
+                            >
+                              {project.isStudyProject
+                                ? "Remove Study Project"
+                                : "Mark as Study Project"}
+                            </button>
+                            <button
                               className="tasks-tree-context-item tasks-tree-context-item--danger"
                               onClick={() => {
                                 setOpenTreeMenu(null);
@@ -1438,6 +1585,7 @@ export const TasksPage = ({
                           </button>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1452,16 +1600,13 @@ export const TasksPage = ({
 
                           return (
                             <div className="tasks-project-child-row" key={collection.id}>
-                              <button
-                                className={`tasks-sidebar-row tasks-sidebar-row--child${
+                              <div
+                                className={`tasks-tree-pill tasks-tree-pill--collection${
                                   selectedView.type === "collection" &&
                                   selectedView.collectionId === collection.id
                                     ? " is-active"
                                     : ""
-                                }`}
-                                onClick={() =>
-                                  setSelectedView({ type: "collection", collectionId: collection.id })
-                                }
+                                }${isCollectionMenuOpen ? " is-menu-open" : ""}`}
                                 onDragOver={(event) => event.preventDefault()}
                                 onDrop={(event) => {
                                   event.preventDefault();
@@ -1473,50 +1618,50 @@ export const TasksPage = ({
 
                                   actions.assignTaskToCollection(taskId, collection.id);
                                 }}
-                                type="button"
+                                style={buildTreePillStyle(collection.color)}
                               >
-                                <span className="tasks-sidebar-row-label">
-                                  <CollectionBadge
-                                    color={collection.color}
-                                    compact
-                                    name={collection.name}
-                                  />
-                                </span>
-                              </button>
-                              <div
-                                className={`tasks-tree-row-end${
-                                  isCollectionMenuOpen ? " is-menu-open" : ""
-                                }`}
-                              >
-                                <strong className="tasks-tree-row-count">
-                                  {taskCountByCollection.get(collection.id) ?? 0}
-                                </strong>
-                                <div
-                                  className={`tasks-tree-menu${
-                                    isCollectionMenuOpen ? " is-open" : ""
-                                  }`}
-                                  data-tree-menu-root="true"
+                                <button
+                                  className="tasks-tree-pill-main"
+                                  onClick={() =>
+                                    setSelectedView({
+                                      type: "collection",
+                                      collectionId: collection.id
+                                    })
+                                  }
+                                  type="button"
                                 >
-                                  <button
-                                    aria-label={`Open actions for ${collection.name}`}
-                                    className="icon-button icon-button--muted tasks-tree-menu-trigger"
-                                    onClick={() =>
-                                      setOpenTreeMenu((current) =>
-                                        current?.type === "collection" &&
-                                        current.collectionId === collection.id
-                                          ? null
-                                          : { type: "collection", collectionId: collection.id }
-                                      )
-                                    }
-                                    type="button"
+                                  <span className="tasks-tree-pill-dot" aria-hidden="true" />
+                                  <span className="tasks-tree-pill-label">{collection.name}</span>
+                                </button>
+                                <div className="tasks-tree-pill-end">
+                                  <strong className="tasks-tree-row-count">
+                                    {taskCountByCollection.get(collection.id) ?? 0}
+                                  </strong>
+                                  <div
+                                    className={`tasks-tree-menu${
+                                      isCollectionMenuOpen ? " is-open" : ""
+                                    }`}
+                                    data-tree-menu-root="true"
                                   >
-                                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                                      <circle cx="6" cy="12" fill="currentColor" r="1.8" />
-                                      <circle cx="12" cy="12" fill="currentColor" r="1.8" />
-                                      <circle cx="18" cy="12" fill="currentColor" r="1.8" />
-                                    </svg>
-                                  </button>
-
+                                    <button
+                                      aria-label={`Open actions for ${collection.name}`}
+                                      className="icon-button icon-button--muted tasks-tree-menu-trigger"
+                                      onClick={() =>
+                                        setOpenTreeMenu((current) =>
+                                          current?.type === "collection" &&
+                                          current.collectionId === collection.id
+                                            ? null
+                                            : { type: "collection", collectionId: collection.id }
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                                        <circle cx="6" cy="12" fill="currentColor" r="1.8" />
+                                        <circle cx="12" cy="12" fill="currentColor" r="1.8" />
+                                        <circle cx="18" cy="12" fill="currentColor" r="1.8" />
+                                      </svg>
+                                    </button>
                                    {isCollectionMenuOpen ? (
                                      <div className="tasks-tree-context-menu" role="menu">
                                        <button
@@ -1551,6 +1696,7 @@ export const TasksPage = ({
                                       </button>
                                     </div>
                                   ) : null}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1562,6 +1708,9 @@ export const TasksPage = ({
                           onClick={() => openCreateCollectionModal(project.id)}
                           type="button"
                         >
+                          <span className="tasks-project-create-icon" aria-hidden="true">
+                            +
+                          </span>
                           <span>Create collection</span>
                         </button>
                       </div>
@@ -1597,26 +1746,32 @@ export const TasksPage = ({
                   >
                     {isProjectExpanded ? "-" : "+"}
                   </button>
-                  <button
-                    className={`tasks-sidebar-row tasks-sidebar-row--project${
+                  <div
+                    className={`tasks-tree-pill tasks-tree-pill--project${
                       selectedView.type === "completed-project" &&
                       selectedView.projectId === project.id
                         ? " is-active"
                         : ""
                     }`}
-                    onClick={() =>
-                      setSelectedView({ type: "completed-project", projectId: project.id })
-                    }
-                    type="button"
+                    style={buildTreePillStyle(project.color)}
                   >
-                    <span className="tasks-sidebar-row-label">
-                      <CollectionBadge color={project.color} compact name={project.name} />
-                    </span>
-                  </button>
-                  <div className="tasks-tree-row-end tasks-tree-row-end--static">
-                    <strong className="tasks-tree-row-count">
-                      {completedTaskCountByProject.get(project.id) ?? 0}
-                    </strong>
+                    <button
+                      className="tasks-tree-pill-main"
+                      onClick={() =>
+                        setSelectedView({ type: "completed-project", projectId: project.id })
+                      }
+                      type="button"
+                      >
+                        <span className="tasks-tree-pill-label">{project.name}</span>
+                        {project.isStudyProject ? (
+                          <span className="study-project-badge">Study Project</span>
+                        ) : null}
+                      </button>
+                    <div className="tasks-tree-pill-end tasks-tree-pill-end--static">
+                      <strong className="tasks-tree-row-count">
+                        {completedTaskCountByProject.get(project.id) ?? 0}
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
@@ -1624,33 +1779,33 @@ export const TasksPage = ({
                   <div className="tasks-project-children">
                     {completedCollectionsByProject.get(project.id)?.map((collection) => (
                       <div className="tasks-project-child-row" key={`completed-${collection.id}`}>
-                        <button
-                          className={`tasks-sidebar-row tasks-sidebar-row--child${
+                        <div
+                          className={`tasks-tree-pill tasks-tree-pill--collection${
                             selectedView.type === "completed-collection" &&
                             selectedView.collectionId === collection.id
                               ? " is-active"
                               : ""
                           }`}
-                          onClick={() =>
-                            setSelectedView({
-                              type: "completed-collection",
-                              collectionId: collection.id
-                            })
-                          }
-                          type="button"
+                          style={buildTreePillStyle(collection.color)}
                         >
-                          <span className="tasks-sidebar-row-label">
-                            <CollectionBadge
-                              color={collection.color}
-                              compact
-                              name={collection.name}
-                            />
-                          </span>
-                        </button>
-                        <div className="tasks-tree-row-end tasks-tree-row-end--static">
-                          <strong className="tasks-tree-row-count">
-                            {completedTaskCountByCollection.get(collection.id) ?? 0}
-                          </strong>
+                          <button
+                            className="tasks-tree-pill-main"
+                            onClick={() =>
+                              setSelectedView({
+                                type: "completed-collection",
+                                collectionId: collection.id
+                              })
+                            }
+                            type="button"
+                          >
+                            <span className="tasks-tree-pill-dot" aria-hidden="true" />
+                            <span className="tasks-tree-pill-label">{collection.name}</span>
+                          </button>
+                          <div className="tasks-tree-pill-end tasks-tree-pill-end--static">
+                            <strong className="tasks-tree-row-count">
+                              {completedTaskCountByCollection.get(collection.id) ?? 0}
+                            </strong>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1725,7 +1880,7 @@ export const TasksPage = ({
         </div>
 
         {sortedVisibleTasks.length > 0 ? (
-          <div className="tasks-table">
+          <div className={`tasks-table${isStudyTableView ? " tasks-table--study" : ""}`}>
             <div className="tasks-table-head">
               <button
                 className={`tasks-sort-button${taskSort?.key === "title" ? " is-active" : ""}`}
@@ -1738,61 +1893,143 @@ export const TasksPage = ({
                   isActive={taskSort?.key === "title"}
                 />
               </button>
-              <button
-                className={`tasks-sort-button${taskSort?.key === "status" ? " is-active" : ""}`}
-                onClick={() => setTaskSort((current) => getNextTaskSortState(current, "status"))}
-                type="button"
-              >
-                <span>Status</span>
-                <SortIndicator
-                  direction={taskSort?.key === "status" ? taskSort.direction : null}
-                  isActive={taskSort?.key === "status"}
-                />
-              </button>
-              <button
-                className={`tasks-sort-button${taskSort?.key === "priority" ? " is-active" : ""}`}
-                onClick={() => setTaskSort((current) => getNextTaskSortState(current, "priority"))}
-                type="button"
-              >
-                <span>Priority</span>
-                <SortIndicator
-                  direction={taskSort?.key === "priority" ? taskSort.direction : null}
-                  isActive={taskSort?.key === "priority"}
-                />
-              </button>
-              <button
-                className={`tasks-sort-button${taskSort?.key === "estimated" ? " is-active" : ""}`}
-                onClick={() => setTaskSort((current) => getNextTaskSortState(current, "estimated"))}
-                type="button"
-              >
-                <span>Estimated</span>
-                <SortIndicator
-                  direction={taskSort?.key === "estimated" ? taskSort.direction : null}
-                  isActive={taskSort?.key === "estimated"}
-                />
-              </button>
-              <button
-                className={`tasks-sort-button${taskSort?.key === "completed" ? " is-active" : ""}`}
-                onClick={() => setTaskSort((current) => getNextTaskSortState(current, "completed"))}
-                type="button"
-              >
-                <span>Completed</span>
-                <SortIndicator
-                  direction={taskSort?.key === "completed" ? taskSort.direction : null}
-                  isActive={taskSort?.key === "completed"}
-                />
-              </button>
-              <button
-                className={`tasks-sort-button${taskSort?.key === "dueDate" ? " is-active" : ""}`}
-                onClick={() => setTaskSort((current) => getNextTaskSortState(current, "dueDate"))}
-                type="button"
-              >
-                <span>Due date</span>
-                <SortIndicator
-                  direction={taskSort?.key === "dueDate" ? taskSort.direction : null}
-                  isActive={taskSort?.key === "dueDate"}
-                />
-              </button>
+              {isStudyTableView ? (
+                <>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "studyPlatform" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "studyPlatform"))
+                    }
+                    type="button"
+                  >
+                    <span>Platform</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "studyPlatform" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "studyPlatform"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "studyDifficulty" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "studyDifficulty"))
+                    }
+                    type="button"
+                  >
+                    <span>Difficulty</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "studyDifficulty" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "studyDifficulty"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "studyStatus" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "studyStatus"))
+                    }
+                    type="button"
+                  >
+                    <span>Study status</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "studyStatus" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "studyStatus"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "timesCompleted" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "timesCompleted"))
+                    }
+                    type="button"
+                  >
+                    <span>Completed</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "timesCompleted" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "timesCompleted"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "studyTime" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "studyTime"))
+                    }
+                    type="button"
+                  >
+                    <span>Study time</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "studyTime" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "studyTime"}
+                    />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "status" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "status"))
+                    }
+                    type="button"
+                  >
+                    <span>Status</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "status" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "status"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "priority" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "priority"))
+                    }
+                    type="button"
+                  >
+                    <span>Priority</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "priority" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "priority"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "estimated" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "estimated"))
+                    }
+                    type="button"
+                  >
+                    <span>Estimated</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "estimated" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "estimated"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "completed" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "completed"))
+                    }
+                    type="button"
+                  >
+                    <span>Completed</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "completed" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "completed"}
+                    />
+                  </button>
+                  <button
+                    className={`tasks-sort-button${taskSort?.key === "dueDate" ? " is-active" : ""}`}
+                    onClick={() =>
+                      setTaskSort((current) => getNextTaskSortState(current, "dueDate"))
+                    }
+                    type="button"
+                  >
+                    <span>Due date</span>
+                    <SortIndicator
+                      direction={taskSort?.key === "dueDate" ? taskSort.direction : null}
+                      isActive={taskSort?.key === "dueDate"}
+                    />
+                  </button>
+                </>
+              )}
               <span aria-hidden="true" />
             </div>
 
@@ -1825,48 +2062,89 @@ export const TasksPage = ({
                           />
                         </div>
                       ) : null}
+                      {isStudyTableView && task.studyTopic.trim() !== "" ? (
+                        <div className="tasks-table-study-topic">{task.studyTopic}</div>
+                      ) : null}
                     </div>
-                    <div className="tasks-table-cell">
-                      <div className="tasks-status-select-wrap">
-                        <select
-                          aria-label={`Change status for ${task.title}`}
-                          className="tasks-status-select"
-                          onChange={(event) =>
-                            actions.moveTask(task.id, event.target.value as ColumnId)
-                          }
-                          onClick={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          value={task.columnId}
-                        >
-                          {columns.map((column) => (
-                            <option key={column.id} value={column.id}>
-                              {column.name}
-                            </option>
-                          ))}
-                        </select>
+                    {isStudyTableView ? (
+                      <>
+                        <div className="tasks-table-cell">
+                          <span className="tasks-table-muted-value">
+                            {task.studyPlatform.trim() || "—"}
+                          </span>
+                        </div>
+                        <div className="tasks-table-cell">
+                          {task.studyDifficulty ? (
+                            <span
+                              className={`study-table-pill study-table-pill--${task.studyDifficulty}`}
+                            >
+                              {task.studyDifficulty}
+                            </span>
+                          ) : (
+                            <span className="tasks-table-muted-value">—</span>
+                          )}
+                        </div>
+                        <div className="tasks-table-cell">
+                          <span className={`study-table-pill study-table-pill--${task.studyStatus}`}>
+                            {task.studyStatus.replace("_", " ")}
+                          </span>
+                        </div>
+                        <div className="tasks-table-cell">
+                          <strong className="tasks-table-number-value">
+                            x{task.timesCompleted}
+                          </strong>
+                        </div>
+                        <div className="tasks-table-cell">
+                          <strong className="tasks-table-number-value">
+                            {formatDurationSummary(task.actualTrackedSeconds)}
+                          </strong>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                      <div className="tasks-table-cell">
+                        <div className="tasks-status-select-wrap">
+                          <select
+                            aria-label={`Change status for ${task.title}`}
+                            className="tasks-status-select"
+                            onChange={(event) =>
+                              actions.moveTask(task.id, event.target.value as ColumnId)
+                            }
+                            onClick={(event) => event.stopPropagation()}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            value={task.columnId}
+                          >
+                            {columns.map((column) => (
+                              <option key={column.id} value={column.id}>
+                                {column.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                    <div className="tasks-table-cell">
-                      <div className="task-priority-wrap">
-                        <span className={`priority-pill priority-pill--${task.priority}`}>
-                          {task.priority}
-                        </span>
+                      <div className="tasks-table-cell">
+                        <div className="task-priority-wrap">
+                          <span className={`priority-pill priority-pill--${task.priority}`}>
+                            {task.priority}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="tasks-table-cell">
-                      <StopwatchIcons
-                        count={task.estimatedPomodoros}
-                        size="sm"
-                        tone="estimated"
-                      />
-                    </div>
-                    <div className="tasks-table-cell">
-                      <StopwatchIcons count={task.pomodoroCount} size="sm" tone="completed" />
-                    </div>
-                    <div className="tasks-table-cell tasks-table-cell--due-date">
-                      <span>{task.estimatedCompletionDate ?? "Unplanned"}</span>
-                      <OverdueIndicator task={task} />
-                    </div>
+                      <div className="tasks-table-cell">
+                        <StopwatchIcons
+                          count={task.estimatedPomodoros}
+                          size="sm"
+                          tone="estimated"
+                        />
+                      </div>
+                      <div className="tasks-table-cell">
+                        <StopwatchIcons count={task.pomodoroCount} size="sm" tone="completed" />
+                      </div>
+                      <div className="tasks-table-cell tasks-table-cell--due-date">
+                        <span>{task.estimatedCompletionDate ?? "Unplanned"}</span>
+                        <OverdueIndicator task={task} />
+                      </div>
+                      </>
+                    )}
                     <div className="tasks-table-cell tasks-table-cell--actions">
                       <button
                         aria-label={`Focus ${task.title}`}
@@ -1914,8 +2192,6 @@ export const TasksPage = ({
           <div
             className="modal-card"
             onClick={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
             role="dialog"
           >
             {modalState === "create-project" ? (
@@ -1938,13 +2214,23 @@ export const TasksPage = ({
                   <span>Project title</span>
                   <input
                     autoFocus
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
                     ref={projectNameInputRef}
                     value={projectName}
                     onChange={(event) => setProjectName(event.target.value)}
                     placeholder="Example: Desktop App"
                   />
+                </label>
+
+                <label className="study-project-option">
+                  <input
+                    checked={projectIsStudyProject}
+                    onChange={(event) => setProjectIsStudyProject(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>Study project</strong>
+                    <small>Tasks in this project use study-problem fields and timers.</small>
+                  </span>
                 </label>
 
                 <div className="modal-footer">
@@ -1986,13 +2272,23 @@ export const TasksPage = ({
                   <span>Project title</span>
                   <input
                     autoFocus
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
                     ref={projectNameInputRef}
                     value={projectName}
                     onChange={(event) => setProjectName(event.target.value)}
                     placeholder="Example: Desktop App"
                   />
+                </label>
+
+                <label className="study-project-option">
+                  <input
+                    checked={projectIsStudyProject}
+                    onChange={(event) => setProjectIsStudyProject(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    <strong>Study project</strong>
+                    <small>Tasks in this project use study-problem fields and timers.</small>
+                  </span>
                 </label>
 
                 <div className="modal-footer">
@@ -2158,26 +2454,28 @@ export const TasksPage = ({
                 </div>
 
                 <div className="task-details-form">
-                  <label className="label-stack">
-                    <span>Column</span>
-                    <select
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      value={draft.columnId}
-                      onChange={(event) =>
-                        setDraft((current) => ({
-                          ...current,
-                          columnId: event.target.value as ColumnId
-                        }))
-                      }
-                    >
-                      {columns.map((column) => (
-                        <option key={column.id} value={column.id}>
-                          {column.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {!isDraftStudyProject ? (
+                    <label className="label-stack">
+                      <span>Column</span>
+                      <select
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        value={draft.columnId}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            columnId: event.target.value as ColumnId
+                          }))
+                        }
+                      >
+                        {columns.map((column) => (
+                          <option key={column.id} value={column.id}>
+                            {column.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
 
                   <label className="label-stack">
                     <span>Project</span>
@@ -2202,7 +2500,11 @@ export const TasksPage = ({
                           return {
                             ...current,
                             taskProjectId: nextProjectId,
-                            taskCollectionId: nextCollectionId
+                            taskCollectionId: nextCollectionId,
+                            isStudyProblem:
+                              nextProjectId === ""
+                                ? false
+                                : (taskProjectsById.get(nextProjectId)?.isStudyProject ?? false)
                           };
                         })
                       }
@@ -2237,7 +2539,13 @@ export const TasksPage = ({
                           return {
                             ...current,
                             taskProjectId: matchedCollection?.taskProjectId ?? current.taskProjectId,
-                            taskCollectionId: nextCollectionId
+                            taskCollectionId: nextCollectionId,
+                            isStudyProblem:
+                              matchedCollection?.taskProjectId === undefined ||
+                              matchedCollection.taskProjectId === null
+                                ? current.isStudyProblem
+                                : (taskProjectsById.get(matchedCollection.taskProjectId)
+                                    ?.isStudyProject ?? false)
                           };
                         })
                       }
@@ -2282,6 +2590,8 @@ export const TasksPage = ({
                     />
                   </label>
 
+                  {!isDraftStudyProject ? (
+                    <>
                   <div className="sub-grid">
                     <label className="label-stack">
                       <span>Priority</span>
@@ -2333,34 +2643,22 @@ export const TasksPage = ({
                       }
                     />
                   </label>
+                    </>
+                  ) : null}
 
+                  {isDraftStudyProject ? (
                   <section className="study-problem-card">
                     <div className="study-problem-header">
                       <div>
                         <strong>Study problem</strong>
                         <span className="subtle">
-                          Mark this as a coding-practice problem while creating it.
+                          Inherited from the selected Study Project.
                         </span>
                       </div>
-                      <label className="study-problem-toggle">
-                        <input
-                          checked={draft.isStudyProblem}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              isStudyProblem: event.target.checked
-                            }))
-                          }
-                          type="checkbox"
-                        />
-                        <span>{draft.isStudyProblem ? "Enabled" : "Off"}</span>
-                      </label>
+                      <span className="study-project-badge">Study Project</span>
                     </div>
 
-                    {draft.isStudyProblem ? (
-                      <>
+                    <>
                         <div className="sub-grid">
                           <label className="label-stack">
                             <span>Platform</span>
@@ -2474,9 +2772,9 @@ export const TasksPage = ({
                             }
                           />
                         </label>
-                      </>
-                    ) : null}
+                    </>
                   </section>
+                  ) : null}
                 </div>
 
                 <div className="modal-footer">

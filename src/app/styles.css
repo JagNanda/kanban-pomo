@@ -1565,6 +1565,61 @@ textarea {
   accent-color: #6fa8ff;
 }
 
+.study-project-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.72rem;
+  padding: 0.82rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(180deg, rgba(7, 9, 14, 0.94), rgba(0, 0, 0, 0.9)),
+    rgba(0, 0, 0, 0.88);
+  color: #ffffff;
+}
+
+.study-project-option input {
+  width: auto;
+  margin-top: 0.18rem;
+  accent-color: #7c8cff;
+}
+
+.study-project-option span {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.study-project-option small {
+  color: #bfc8dc;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.study-project-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  max-width: 7.2rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background:
+    linear-gradient(180deg, rgba(10, 12, 18, 0.98), rgba(0, 0, 0, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  overflow: hidden;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .study-problem-summary strong {
   color: #ffffff;
 }
@@ -2059,6 +2114,20 @@ textarea {
   align-items: center;
 }
 
+.tasks-table--study .tasks-table-head,
+.tasks-table--study .tasks-table-row {
+  grid-template-columns: minmax(9.5rem, 1.9fr) minmax(5.8rem, 0.78fr) minmax(5.2rem, 0.68fr) minmax(6rem, 0.82fr) minmax(5rem, 0.58fr) minmax(5.2rem, 0.64fr) minmax(5.8rem, 0.58fr);
+}
+
+.tasks-table--study .tasks-table-head {
+  padding-inline: 0.72rem;
+}
+
+.tasks-table--study .tasks-table-head > .tasks-sort-button:not(:first-child) {
+  justify-content: center;
+  text-align: center;
+}
+
 .tasks-table-head {
   padding: 0 0.25rem;
   color: #98a1b9;
@@ -2191,6 +2260,64 @@ textarea {
   margin-top: 0.28rem;
 }
 
+.tasks-table-study-topic {
+  margin-top: 0.28rem;
+  color: #aeb9d4;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-table-muted-value {
+  color: #8d9ab8;
+}
+
+.tasks-table-number-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.study-table-pill {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0.32rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid rgba(105, 119, 156, 0.4);
+  background: rgba(30, 38, 58, 0.72);
+  color: #dce6ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  text-transform: capitalize;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study-table-pill--easy,
+.study-table-pill--solved {
+  border-color: rgba(107, 229, 138, 0.36);
+  background: rgba(39, 106, 67, 0.28);
+  color: #8df0a8;
+}
+
+.study-table-pill--medium,
+.study-table-pill--attempted,
+.study-table-pill--reviewing {
+  border-color: rgba(182, 145, 255, 0.36);
+  background: rgba(89, 62, 150, 0.28);
+  color: #c8b0ff;
+}
+
+.study-table-pill--hard,
+.study-table-pill--unstarted {
+  border-color: rgba(255, 132, 158, 0.34);
+  background: rgba(132, 52, 76, 0.26);
+  color: #ff9eb4;
+}
+
 .tasks-table-cell--title {
   padding-right: 0.2rem;
 }
@@ -2199,7 +2326,20 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.42rem;
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+.tasks-table--study .tasks-table-cell--actions {
+  gap: 0.24rem;
+}
+
+.tasks-table--study .tasks-table-cell:not(.tasks-table-cell--title) {
+  justify-self: center;
+  text-align: center;
+}
+
+.tasks-table--study .tasks-table-cell--actions {
+  justify-content: center;
 }
 
 .tasks-table-cell .stopwatch-list {
@@ -4755,6 +4895,25 @@ button.report-task-summary-stat:hover {
   border-radius: 12px;
 }
 
+.app-shell--focus .focus-panel-card--task {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell--focus .focus-panel-card--task .focus-card-header,
+.app-shell--focus .focus-panel-card--task .focus-task-title {
+  flex: 0 0 auto;
+}
+
+.app-shell--focus .focus-panel-card--task .focus-task-meta {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
 .app-shell--focus .focus-meta-row {
   min-height: 1.98rem;
   padding: 0.32rem 0.64rem;
@@ -6027,39 +6186,14 @@ button.report-snapshot-card {
   margin-top: 0.65rem;
 }
 
-.report-activity-legend {
-  display: grid;
-  gap: 0.7rem;
-  padding-left: 1.2rem;
-}
-
-.report-activity-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: #b5c0d8;
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.report-activity-legend-item i {
-  width: 0.76rem;
-  height: 0.76rem;
-  border-radius: 4px;
-  background: #303849;
-}
-
-.report-activity-legend-item.intensity-1 i,
 .report-heatmap-cell.intensity-1 {
   background: linear-gradient(135deg, rgba(67, 176, 103, 0.7), rgba(43, 111, 75, 0.7));
 }
 
-.report-activity-legend-item.intensity-2 i,
 .report-heatmap-cell.intensity-2 {
   background: linear-gradient(135deg, rgba(91, 130, 255, 0.82), rgba(54, 74, 162, 0.82));
 }
 
-.report-activity-legend-item.intensity-3 i,
 .report-heatmap-cell.intensity-3 {
   background: linear-gradient(135deg, rgba(139, 100, 255, 0.95), rgba(83, 79, 219, 0.95));
 }
@@ -6878,21 +7012,6 @@ button.report-snapshot-card {
     margin-top: 0.5rem;
   }
 
-  .report-activity-legend {
-    gap: 0.46rem;
-    padding-left: 0.48rem;
-  }
-
-  .report-activity-legend-item {
-    gap: 0.44rem;
-    font-size: 0.64rem;
-  }
-
-  .report-activity-legend-item i {
-    width: 0.58rem;
-    height: 0.58rem;
-  }
-
   .report-heatmap {
     grid-template-columns: 2.55rem repeat(var(--day-count), minmax(0.58rem, 1fr));
     gap: 0.22rem;
@@ -7015,10 +7134,6 @@ button.report-snapshot-card {
     grid-template-columns: 1fr;
   }
 
-  .report-activity-legend {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-left: 0;
-  }
 }
 
 @media (max-width: 720px) {
@@ -7588,21 +7703,6 @@ button.report-snapshot-card {
   margin-top: 0.38rem;
 }
 
-.app-shell--report .report-activity-legend {
-  gap: 0.42rem;
-  padding-left: 0.35rem;
-}
-
-.app-shell--report .report-activity-legend-item {
-  gap: 0.42rem;
-  font-size: 0.64rem;
-}
-
-.app-shell--report .report-activity-legend-item i {
-  width: 0.58rem;
-  height: 0.58rem;
-}
-
 .app-shell--report .report-month-activity-calendar {
   gap: 0.28rem;
 }
@@ -7823,6 +7923,8 @@ button.report-snapshot-card {
   --tasks-accent: #7b8cff;
   --tasks-accent-blue: #71a9ff;
   --tasks-accent-cyan: #66d3d0;
+  gap: 1.2rem;
+  padding-right: 1rem;
 }
 
 .app-shell--tasks .tasks-layout {
@@ -7832,6 +7934,7 @@ button.report-snapshot-card {
 
 .app-shell--tasks .page-shell--tasks {
   overflow: hidden;
+  padding-right: 0;
   padding-bottom: 0;
 }
 
@@ -8088,10 +8191,19 @@ button.report-snapshot-card {
   gap: 0.42rem;
 }
 
+.app-shell--tasks .tasks-table--study .tasks-table-head,
+.app-shell--tasks .tasks-table--study .tasks-table-row {
+  grid-template-columns: minmax(9.5rem, 1.9fr) minmax(5.8rem, 0.78fr) minmax(5.2rem, 0.68fr) minmax(6rem, 0.82fr) minmax(5rem, 0.58fr) minmax(5.2rem, 0.64fr) minmax(5.8rem, 0.58fr);
+}
+
 .app-shell--tasks .tasks-table-head {
   padding-inline: 0.56rem;
   color: #9facce;
   letter-spacing: 0;
+}
+
+.app-shell--tasks .tasks-table--study .tasks-table-head {
+  padding-inline: 0.72rem;
 }
 
 .app-shell--tasks .tasks-sort-button.is-active,
@@ -8105,10 +8217,15 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-table-row {
+  padding-right: 1.18rem;
   border-color: rgba(78, 96, 139, 0.34);
   background:
     linear-gradient(180deg, rgba(13, 22, 39, 0.9), rgba(8, 15, 28, 0.95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.app-shell--tasks .tasks-table--study .tasks-table-row {
+  padding-right: 0.72rem;
 }
 
 .app-shell--tasks .tasks-table-row:hover {
@@ -8171,9 +8288,9 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-table-cell--actions .icon-button {
-  width: 2.42rem;
-  height: 2.42rem;
-  flex: 0 0 2.42rem;
+  width: 2.18rem;
+  height: 2.18rem;
+  flex: 0 0 2.18rem;
   padding: 0;
   border-color: rgba(99, 115, 154, 0.28);
   background: rgba(28, 36, 59, 0.72);
@@ -8182,9 +8299,22 @@ button.report-snapshot-card {
 
 .app-shell--tasks .tasks-table-cell--actions {
   align-items: center;
-  gap: 0.36rem;
+  gap: 0.28rem;
   justify-content: flex-start;
   min-width: 0;
+}
+
+.app-shell--tasks .tasks-table--study .tasks-table-cell--actions {
+  gap: 0.22rem;
+}
+
+.app-shell--tasks .tasks-table--study .tasks-table-cell--actions .icon-button,
+.app-shell--tasks .tasks-table--study .tasks-row-focus-button {
+  width: 1.95rem;
+  min-width: 1.95rem;
+  height: 1.95rem;
+  min-height: 1.95rem;
+  flex-basis: 1.95rem;
 }
 
 .app-shell--tasks .tasks-table-cell--due-date {
@@ -8202,17 +8332,17 @@ button.report-snapshot-card {
 }
 
 .app-shell--tasks .tasks-table-cell--actions .icon-button svg {
-  width: 1.08rem;
-  height: 1.08rem;
+  width: 0.98rem;
+  height: 0.98rem;
 }
 
 .app-shell--tasks .tasks-row-focus-button {
   display: inline-flex;
-  width: 2.42rem;
-  min-width: 2.42rem;
-  height: 2.42rem;
-  min-height: 2.42rem;
-  flex: 0 0 2.42rem;
+  width: 2.18rem;
+  min-width: 2.18rem;
+  height: 2.18rem;
+  min-height: 2.18rem;
+  flex: 0 0 2.18rem;
   align-items: center;
   justify-content: center;
   padding: 0;
@@ -8221,15 +8351,15 @@ button.report-snapshot-card {
   background:
     linear-gradient(135deg, rgba(63, 79, 166, 0.78), rgba(51, 70, 139, 0.82));
   color: #eef3ff;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
   line-height: 1;
   cursor: pointer;
 }
 
 .app-shell--tasks .tasks-row-focus-button svg {
-  width: 1.08rem;
-  height: 1.08rem;
+  width: 0.98rem;
+  height: 0.98rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -8461,6 +8591,347 @@ button.report-snapshot-card {
   height: 1.78rem;
 }
 
+/* Tasks sidebar full-surface refresh */
+.app-shell--tasks .tasks-layout {
+  grid-template-columns: minmax(18rem, 20rem) minmax(0, 1fr);
+}
+
+.app-shell--tasks .tasks-sidebar-card {
+  padding: 1rem 0.82rem 1rem 0.92rem;
+}
+
+.app-shell--tasks .tasks-sidebar-section {
+  gap: 0.54rem;
+}
+
+.app-shell--tasks .tasks-sidebar-section:first-child {
+  gap: 0.6rem;
+  padding: 0;
+}
+
+.app-shell--tasks .tasks-sidebar-divider {
+  margin-block: 0.08rem;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row {
+  min-height: 3.05rem;
+  padding: 0.58rem 0.72rem 0.58rem 0.78rem;
+  border-color: rgba(91, 108, 148, 0.28);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(135, 146, 255, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(18, 27, 48, 0.82), rgba(12, 20, 37, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 10px 18px rgba(0, 0, 0, 0.08);
+}
+
+.app-shell--tasks .tasks-sidebar-section:first-child .tasks-sidebar-filter-row {
+  min-height: 3.05rem;
+  padding: 0.58rem 0.72rem 0.58rem 0.78rem;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(135, 146, 255, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(18, 27, 48, 0.82), rgba(12, 20, 37, 0.92));
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row:hover {
+  border-color: rgba(112, 132, 183, 0.4);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(151, 163, 255, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(23, 34, 59, 0.9), rgba(14, 23, 42, 0.96));
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row.is-active,
+.app-shell--tasks .tasks-sidebar-section:first-child .tasks-sidebar-filter-row.is-active {
+  border-color: rgba(135, 146, 255, 0.44);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(173, 155, 255, 0.16), transparent 46%),
+    linear-gradient(135deg, rgba(37, 48, 90, 0.96), rgba(24, 35, 67, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 22px rgba(25, 32, 72, 0.2);
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label {
+  gap: 0.72rem;
+  color: #eef3ff;
+  font-size: 0.94rem;
+  font-weight: 760;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-label svg {
+  width: 1.28rem;
+  height: 1.28rem;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row--today .tasks-sidebar-filter-label svg {
+  color: #b48cff;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row--tomorrow .tasks-sidebar-filter-label svg {
+  color: #f4bf58;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row--month .tasks-sidebar-filter-label svg {
+  color: #74b3ff;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row--scheduled .tasks-sidebar-filter-label svg {
+  color: #79ddb7;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row--all .tasks-sidebar-filter-label svg {
+  color: #ae8bff;
+}
+
+.app-shell--tasks .tasks-sidebar-filter-row strong {
+  min-width: 2rem;
+  min-height: 2rem;
+}
+
+.app-shell--tasks .tasks-sidebar-section-header {
+  padding: 0.48rem 0.34rem 0.26rem;
+  font-size: 0.78rem;
+}
+
+.app-shell--tasks .tasks-sidebar-add {
+  width: 2.32rem;
+  height: 2.32rem;
+  font-size: 1.2rem;
+}
+
+.app-shell--tasks .tasks-project-group {
+  gap: 0.42rem;
+}
+
+.app-shell--tasks .tasks-project-row {
+  grid-template-columns: 1.95rem minmax(0, 1fr);
+  gap: 0.48rem;
+}
+
+.app-shell--tasks .tasks-project-child-row {
+  display: block;
+}
+
+.app-shell--tasks .tasks-project-toggle {
+  width: 1.95rem;
+  height: 1.95rem;
+  align-self: center;
+}
+
+.app-shell--tasks .tasks-tree-pill {
+  --tasks-tree-accent: #8f99b1;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 2.68rem;
+  align-items: center;
+  border: 1px solid
+    color-mix(in srgb, var(--tasks-tree-accent) 46%, rgba(118, 135, 177, 0.24));
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      circle at 14% 0%,
+      color-mix(in srgb, var(--tasks-tree-accent) 18%, transparent),
+      transparent 46%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tasks-tree-accent) 17%, rgba(16, 25, 43, 0.96)),
+      color-mix(in srgb, var(--tasks-tree-accent) 9%, rgba(8, 15, 28, 0.98))
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 24px color-mix(in srgb, var(--tasks-tree-accent) 11%, transparent);
+  overflow: visible;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.app-shell--tasks .tasks-tree-pill:hover,
+.app-shell--tasks .tasks-tree-pill:focus-within {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--tasks-tree-accent) 62%, rgba(159, 175, 221, 0.36));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 26px color-mix(in srgb, var(--tasks-tree-accent) 16%, transparent);
+}
+
+.app-shell--tasks .tasks-tree-pill.is-active {
+  border-color: color-mix(in srgb, var(--tasks-tree-accent) 68%, rgba(163, 174, 255, 0.44));
+  background:
+    radial-gradient(
+      circle at 14% 0%,
+      color-mix(in srgb, var(--tasks-tree-accent) 28%, transparent),
+      transparent 48%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tasks-tree-accent) 24%, rgba(24, 34, 61, 0.96)),
+      color-mix(in srgb, var(--tasks-tree-accent) 14%, rgba(10, 18, 34, 0.98))
+    );
+}
+
+.app-shell--tasks .tasks-tree-pill.is-menu-open {
+  z-index: 30;
+}
+
+.app-shell--tasks .tasks-tree-pill-main {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.64rem;
+  padding: 0.4rem 0.82rem;
+  border-radius: inherit;
+  background: transparent;
+  color: color-mix(in srgb, var(--tasks-tree-accent) 56%, #ffffff);
+  text-align: left;
+}
+
+.app-shell--tasks .tasks-tree-pill-main:hover,
+.app-shell--tasks .tasks-tree-pill-main:focus-visible {
+  color: color-mix(in srgb, var(--tasks-tree-accent) 42%, #ffffff);
+  outline: none;
+}
+
+.app-shell--tasks .tasks-tree-pill-label {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 760;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell--tasks .tasks-tree-pill-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tasks-tree-accent) 72%, #ffffff);
+  box-shadow: 0 0 0 0.18rem color-mix(in srgb, var(--tasks-tree-accent) 18%, transparent);
+}
+
+.app-shell--tasks .tasks-tree-pill-end {
+  position: relative;
+  display: flex;
+  width: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  margin-right: 0.38rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell--tasks .tasks-tree-pill-end--static {
+  width: auto;
+  min-width: 2rem;
+}
+
+.app-shell--tasks .tasks-tree-pill .tasks-tree-row-count {
+  min-width: 1.78rem;
+  min-height: 1.78rem;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(198, 206, 255, 0.16), transparent 54%),
+    linear-gradient(180deg, rgba(43, 53, 83, 0.96), rgba(31, 40, 66, 0.96));
+}
+
+.app-shell--tasks .tasks-tree-pill.is-active .tasks-tree-row-count {
+  background:
+    radial-gradient(circle at 35% 25%, rgba(219, 224, 255, 0.18), transparent 54%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tasks-tree-accent) 22%, rgba(56, 67, 105, 0.96)),
+      color-mix(in srgb, var(--tasks-tree-accent) 10%, rgba(31, 40, 66, 0.96))
+    );
+}
+
+.app-shell--tasks .tasks-tree-pill .tasks-tree-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell--tasks .tasks-tree-pill .tasks-tree-menu.is-open {
+  z-index: 40;
+}
+
+.app-shell--tasks .tasks-tree-pill .tasks-tree-menu-trigger {
+  width: 1.78rem;
+  height: 1.78rem;
+  color: #edf2fb;
+}
+
+.app-shell--tasks .tasks-tree-pill:hover .tasks-tree-row-count,
+.app-shell--tasks .tasks-tree-pill:focus-within .tasks-tree-row-count,
+.app-shell--tasks .tasks-tree-pill.is-menu-open .tasks-tree-row-count {
+  opacity: 0;
+}
+
+.app-shell--tasks .tasks-tree-pill:hover .tasks-tree-menu-trigger,
+.app-shell--tasks .tasks-tree-pill:focus-within .tasks-tree-menu-trigger,
+.app-shell--tasks .tasks-tree-pill .tasks-tree-menu.is-open .tasks-tree-menu-trigger {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-shell--tasks .tasks-project-children {
+  gap: 0.42rem;
+  margin-left: 1.08rem;
+  padding-left: 1.38rem;
+}
+
+.app-shell--tasks .tasks-project-children::before {
+  top: -0.7rem;
+  bottom: 1.05rem;
+}
+
+.app-shell--tasks .tasks-project-child-row::before,
+.app-shell--tasks .tasks-project-create-collection::before {
+  left: -1.38rem;
+  width: 1.1rem;
+}
+
+.app-shell--tasks .tasks-sidebar-row--action {
+  min-height: 2.68rem;
+  gap: 0.62rem;
+  justify-content: center;
+  border-style: dashed;
+  border-radius: 16px;
+  font-size: 0.84rem;
+}
+
+.app-shell--tasks .tasks-project-create-icon {
+  display: inline-flex;
+  width: 1.08rem;
+  height: 1.08rem;
+  align-items: center;
+  justify-content: center;
+  color: #9b8cff;
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
+@media (max-width: 1200px) {
+  .app-shell--tasks .tasks-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Focus upcoming due fit */
 .app-shell--focus .focus-panel-card--deadlines {
   min-height: 8.6rem;
@@ -8541,6 +9012,14 @@ button.report-snapshot-card {
   --focus-accent-strong: #8fb4ff;
   --focus-glow: rgba(255, 93, 104, 0.2);
   --focus-glow-secondary: rgba(143, 180, 255, 0.14);
+}
+
+.focus-shell--ai_work,
+.app-shell--focus .focus-shell--ai_work {
+  --focus-accent: #9d8cff;
+  --focus-accent-strong: #77d7ff;
+  --focus-glow: rgba(157, 140, 255, 0.2);
+  --focus-glow-secondary: rgba(119, 215, 255, 0.14);
 }
 
 .focus-action-button--procrastinate {
@@ -8792,63 +9271,6 @@ button.report-snapshot-card {
   grid-template-columns: minmax(0, 1fr);
   gap: 1.05rem;
   align-items: start;
-}
-
-.app-shell--report .report-activity-legend-item {
-  gap: 0.46rem;
-}
-
-.app-shell--report .report-activity-legend-swatches {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 0.26rem;
-  align-items: center;
-}
-
-.app-shell--report .report-activity-legend-item .report-activity-legend-dot {
-  width: 0.58rem;
-  height: 0.58rem;
-  border-radius: 999px;
-}
-
-.app-shell--report .report-activity-legend-item.intensity-0 .report-activity-legend-dot {
-  background: #303849;
-}
-
-.app-shell--report .report-activity-legend-item.intensity-1 .report-activity-legend-dot--focus {
-  background: rgba(67, 176, 103, 0.78);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-2 .report-activity-legend-dot--focus {
-  background: rgba(91, 130, 255, 0.88);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-3 .report-activity-legend-dot--focus {
-  background: rgba(139, 100, 255, 0.96);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-1 .report-activity-legend-dot--procrastination {
-  background: rgba(255, 210, 76, 0.82);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-2 .report-activity-legend-dot--procrastination {
-  background: rgba(255, 143, 42, 0.88);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-3 .report-activity-legend-dot--procrastination {
-  background: rgba(232, 70, 70, 0.94);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-1 .report-activity-legend-dot--interruption {
-  background: rgba(255, 139, 202, 0.82);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-2 .report-activity-legend-dot--interruption {
-  background: rgba(221, 86, 232, 0.88);
-}
-
-.app-shell--report .report-activity-legend-item.intensity-3 .report-activity-legend-dot--interruption {
-  background: rgba(149, 92, 255, 0.94);
 }
 
 .report-activity-calendar-block {
@@ -9231,5 +9653,56 @@ button.report-snapshot-card {
   .app-shell--report .report-lower-grid {
     flex-basis: 13.75rem;
     min-height: 13.75rem;
+  }
+}
+
+/* Report activity calendar refresh */
+.app-shell--report .report-activity-body {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.58rem;
+}
+
+.app-shell--report .report-activity-range-month-calendars {
+  grid-template-columns: repeat(4, minmax(0, max-content));
+}
+
+.report-month-activity-calendar--focus .report-month-activity-day.intensity-1 {
+  background: rgba(144, 202, 255, 0.58);
+  border-color: rgba(176, 220, 255, 0.42);
+}
+
+.report-month-activity-calendar--focus .report-month-activity-day.intensity-2 {
+  background: rgba(78, 140, 238, 0.72);
+  border-color: rgba(111, 168, 255, 0.48);
+}
+
+.report-month-activity-calendar--focus .report-month-activity-day.intensity-3 {
+  background: rgba(30, 83, 184, 0.88);
+  border-color: rgba(70, 126, 226, 0.58);
+}
+
+.report-month-activity-calendar--ai .report-month-activity-day.intensity-1 {
+  background: rgba(215, 193, 255, 0.58);
+  border-color: rgba(229, 214, 255, 0.42);
+}
+
+.report-month-activity-calendar--ai .report-month-activity-day.intensity-2 {
+  background: rgba(165, 126, 242, 0.72);
+  border-color: rgba(188, 153, 255, 0.48);
+}
+
+.report-month-activity-calendar--ai .report-month-activity-day.intensity-3 {
+  background: rgba(96, 58, 190, 0.88);
+  border-color: rgba(132, 95, 224, 0.58);
+}
+
+.report-month-activity-calendar--focus .report-month-activity-day strong,
+.report-month-activity-calendar--ai .report-month-activity-day strong {
+  color: #f3f8ff;
+}
+
+@media (max-width: 1180px) {
+  .app-shell--report .report-activity-range-month-calendars {
+    grid-template-columns: repeat(2, minmax(0, max-content));
   }
 }

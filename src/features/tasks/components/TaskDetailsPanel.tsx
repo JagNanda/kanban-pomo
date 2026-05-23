@@ -117,6 +117,12 @@ export const TaskDetailsPanel = ({
   const availableProjects = taskProjects.filter((project) =>
     taskCollections.some((collection) => collection.taskProjectId === project.id)
   );
+  const taskProject =
+    task.taskProjectId !== null
+      ? taskProjects.find((project) => project.id === task.taskProjectId) ?? null
+      : null;
+  const isInheritedStudyProblem = taskProject?.isStudyProject ?? false;
+  const isStudyTask = task.isStudyProblem || isInheritedStudyProblem;
   const sortedSessionHistory = sessionHistory
     .slice()
     .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
@@ -183,21 +189,23 @@ export const TaskDetailsPanel = ({
         </label>
 
         <div className="sub-grid">
-          <label className="label-stack">
-            <span>Status</span>
-            <select
-              onMouseDown={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-              value={task.columnId}
-              onChange={(event) => onUpdateStatus(task.id, event.target.value as ColumnId)}
-            >
-              {columns.map((column) => (
-                <option key={column.id} value={column.id}>
-                  {column.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isStudyTask ? (
+            <label className="label-stack">
+              <span>Status</span>
+              <select
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                value={task.columnId}
+                onChange={(event) => onUpdateStatus(task.id, event.target.value as ColumnId)}
+              >
+                {columns.map((column) => (
+                  <option key={column.id} value={column.id}>
+                    {column.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           <label className="label-stack">
             <span>Project</span>
@@ -241,31 +249,37 @@ export const TaskDetailsPanel = ({
             </select>
           </label>
 
-          <label className="label-stack">
-            <span>Priority</span>
-            <select
-              onMouseDown={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-              value={task.priority}
-              onChange={(event) =>
-                onUpdatePriority(task.id, event.target.value as TaskPriority)
-              }
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </label>
+          {!isStudyTask ? (
+            <>
+              <label className="label-stack">
+                <span>Priority</span>
+                <select
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  value={task.priority}
+                  onChange={(event) =>
+                    onUpdatePriority(task.id, event.target.value as TaskPriority)
+                  }
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
 
-          <label className="label-stack">
-            <span>Estimated completion date</span>
-            <CalendarInput
-              value={task.estimatedCompletionDate ?? ""}
-              onChange={(nextValue) => onUpdateEstimatedDate(task.id, nextValue)}
-            />
-          </label>
+              <label className="label-stack">
+                <span>Estimated completion date</span>
+                <CalendarInput
+                  value={task.estimatedCompletionDate ?? ""}
+                  onChange={(nextValue) => onUpdateEstimatedDate(task.id, nextValue)}
+                />
+              </label>
+            </>
+          ) : null}
         </div>
 
+        {!isStudyTask ? (
+          <>
         <div className="sub-grid">
           <label className="label-stack">
             <span>Estimated Pomodoros</span>
@@ -314,33 +328,46 @@ export const TaskDetailsPanel = ({
             <StopwatchIcons count={task.pomodoroCount} tone="completed" />
           </div>
         </div>
+          </>
+        ) : null}
 
+        {isStudyTask ? (
         <section className="study-problem-card">
           <div className="study-problem-header">
             <div>
               <strong>Study problem</strong>
               <span className="subtle">
-                Track coding-practice metadata without leaving the task workflow.
+                {isInheritedStudyProblem
+                  ? "Inherited from this task's Study Project."
+                  : "Track coding-practice metadata without leaving the task workflow."}
               </span>
             </div>
-            <label className="study-problem-toggle">
-              <input
-                checked={task.isStudyProblem}
-                onChange={(event) =>
-                  onUpdateStudyMetadata(task.id, {
-                    isStudyProblem: event.target.checked
-                  })
-                }
-                type="checkbox"
-              />
-              <span>{task.isStudyProblem ? "Enabled" : "Off"}</span>
-            </label>
+            {isInheritedStudyProblem ? (
+              <span className="study-project-badge">Study Project</span>
+            ) : (
+              <label className="study-problem-toggle">
+                <input
+                  checked={task.isStudyProblem}
+                  onChange={(event) =>
+                    onUpdateStudyMetadata(task.id, {
+                      isStudyProblem: event.target.checked
+                    })
+                  }
+                  type="checkbox"
+                />
+                <span>{task.isStudyProblem ? "Enabled" : "Off"}</span>
+              </label>
+            )}
           </div>
 
           <div className="focus-stat-grid study-problem-summary">
             <div className="focus-stat-card">
               <span>Tracked time</span>
               <strong>{formatDurationSummary(task.actualTrackedSeconds)}</strong>
+            </div>
+            <div className="focus-stat-card">
+              <span>AI time</span>
+              <strong>{formatDurationSummary(task.aiTrackedSeconds)}</strong>
             </div>
             <div className="focus-stat-card">
               <span>Last studied</span>
@@ -355,7 +382,7 @@ export const TaskDetailsPanel = ({
             </div>
           </div>
 
-          {task.isStudyProblem ? (
+          {isStudyTask ? (
             <>
               <div className="sub-grid">
                 <label className="label-stack">
@@ -493,6 +520,7 @@ export const TaskDetailsPanel = ({
             </>
           ) : null}
         </section>
+        ) : null}
 
         <div className="field-list-header">
           <strong>Custom fields</strong>

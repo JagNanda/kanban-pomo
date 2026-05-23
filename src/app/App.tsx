@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BoardScreen } from "../features/board/components/BoardScreen";
 import { PomodoroPanel } from "../features/pomodoro/components/PomodoroPanel";
 import { ReportPage, type ReportViewMode } from "../features/report/components/ReportPage";
@@ -10,6 +10,7 @@ import {
 } from "../features/tasks/components/TasksPage";
 import { useBoardState } from "../features/board/application/useBoardState";
 import { usePomodoroController } from "../features/pomodoro/application/usePomodoroController";
+import { useAiTimerController } from "../features/pomodoro/application/useAiTimerController";
 import type { Task, TaskId } from "../features/tasks/domain/task.types";
 
 type AppPage = "board" | "tasks" | "focus" | "report";
@@ -92,6 +93,7 @@ export const App = (): JSX.Element => {
     useState<ReportViewMode>("overview");
   const [tasksNavigationIntent, setTasksNavigationIntent] =
     useState<TasksNavigationIntent | null>(null);
+  const shouldResumeFocusAfterAiTimerRef = useRef(false);
   const completedColumnId =
     boardState.state.columns.find((column) =>
       ["completed", "done"].includes(column.name.trim().toLowerCase())
@@ -99,10 +101,15 @@ export const App = (): JSX.Element => {
 
   const pomodoro = usePomodoroController({
     onWorkSessionCompleted: boardState.actions.recordCompletedPomodoro,
+    onStudySessionCompleted: boardState.actions.recordCompletedStudySession,
+    onStudySessionAttempted: boardState.actions.recordAttemptedStudySession,
     onWorkSessionInterrupted: boardState.actions.recordInterruptedPomodoro,
     onBreakRecorded: boardState.actions.recordBreak,
     onProcrastinationRecorded: boardState.actions.recordProcrastination,
     onInterruptionRecorded: boardState.actions.recordInterruption
+  });
+  const aiTimer = useAiTimerController({
+    onAiWorkRecorded: boardState.actions.recordAiWork
   });
 
   if (boardState.isLoading || pomodoro.isLoading) {
@@ -158,11 +165,22 @@ export const App = (): JSX.Element => {
     ? boardState.state.interruptionRecords.filter((record) => record.taskId === focusTask.id)
     : [];
 
+  const focusTaskAiWorkHistory = focusTask
+    ? boardState.state.aiWorkRecords.filter((record) => record.taskId === focusTask.id)
+    : [];
+
+  const startFocusTimerForTask = (taskId: TaskId): void => {
+    const task = boardState.state.tasks.find((candidate) => candidate.id === taskId);
+    pomodoro.actions.startForTask(taskId, {
+      workMode: task?.isStudyProblem ? "study" : "pomodoro"
+    });
+  };
+
   const handleStartFocus = (taskId: TaskId): void => {
     boardState.actions.ensureTaskInDev(taskId);
     boardState.actions.selectTask(taskId);
     setCurrentPage("focus");
-    pomodoro.actions.startForTask(taskId);
+    startFocusTimerForTask(taskId);
   };
 
   const handleFocusTaskFromTasks = (taskId: TaskId): void => {
@@ -177,6 +195,31 @@ export const App = (): JSX.Element => {
     }
 
     boardState.actions.moveTask(taskId, completedColumnId);
+  };
+
+  const handleStartAiTimer = (taskId: TaskId): void => {
+    if (pomodoro.state.status === "running" && pomodoro.state.phaseType === "work") {
+      shouldResumeFocusAfterAiTimerRef.current = true;
+      pomodoro.actions.pause();
+    } else {
+      shouldResumeFocusAfterAiTimerRef.current = false;
+    }
+
+    aiTimer.actions.startForTask(taskId);
+  };
+
+  const handleStopAiTimer = (): void => {
+    aiTimer.actions.stop();
+
+    if (shouldResumeFocusAfterAiTimerRef.current) {
+      shouldResumeFocusAfterAiTimerRef.current = false;
+      pomodoro.actions.resume();
+    }
+  };
+
+  const handleCancelAiTimer = (): void => {
+    shouldResumeFocusAfterAiTimerRef.current = false;
+    aiTimer.actions.cancel();
   };
 
   const handleOpenTaskInTasks = (
@@ -308,6 +351,7 @@ export const App = (): JSX.Element => {
               tasksInDev={inDevTasks}
               upcomingDueTasks={upcomingDueTasks}
               timerState={pomodoro.state}
+              aiTimerState={aiTimer.state}
               config={pomodoro.config}
               selectedTask={focusTask}
               allPomodoroSessions={boardState.state.pomodoroSessions}
@@ -318,10 +362,11 @@ export const App = (): JSX.Element => {
               breakHistory={focusTaskBreakHistory}
               procrastinationHistory={focusTaskProcrastinationHistory}
               interruptionHistory={focusTaskInterruptionHistory}
+              aiWorkHistory={focusTaskAiWorkHistory}
               onSelectTask={(taskId) => boardState.actions.selectTask(taskId)}
               onViewAllUpcomingDue={handleViewAllUpcomingDue}
               onViewAllRecentActivity={handleViewAllRecentActivity}
-              onStart={(taskId) => pomodoro.actions.startForTask(taskId)}
+              onStart={startFocusTimerForTask}
               onStartBreak={(taskId, durationSeconds) =>
                 pomodoro.actions.startShortBreakForTask(taskId, durationSeconds)
               }
@@ -332,6 +377,7 @@ export const App = (): JSX.Element => {
               onCompleteTask={handleCompleteFocusTask}
               onConfigChange={pomodoro.actions.updateConfig}
               onFinish={pomodoro.actions.finish}
+              onGiveUpStudy={pomodoro.actions.giveUpStudy}
               onFinishBreak={pomodoro.actions.finishBreak}
               onPause={pomodoro.actions.pause}
               onResume={pomodoro.actions.resume}
@@ -341,6 +387,11 @@ export const App = (): JSX.Element => {
               onStopInterruption={pomodoro.actions.stopInterruption}
               onCancelInterruption={pomodoro.actions.cancelInterruption}
               onReset={pomodoro.actions.reset}
+              onStartAiTimer={handleStartAiTimer}
+              onStopAiTimer={handleStopAiTimer}
+              onPauseAiTimer={aiTimer.actions.pause}
+              onResumeAiTimer={aiTimer.actions.resume}
+              onCancelAiTimer={handleCancelAiTimer}
             />
           ) : (
             <ReportPage
@@ -355,6 +406,8 @@ export const App = (): JSX.Element => {
               archivedProcrastinationRecords={boardState.state.archivedProcrastinationRecords}
               interruptionRecords={boardState.state.interruptionRecords}
               archivedInterruptionRecords={boardState.state.archivedInterruptionRecords}
+              aiWorkRecords={boardState.state.aiWorkRecords}
+              archivedAiWorkRecords={boardState.state.archivedAiWorkRecords}
               initialViewMode={reportInitialViewMode}
               onOpenTask={handleOpenTaskInTasks}
             />

@@ -8,6 +8,7 @@ export interface TaskProject {
   boardId: BoardId;
   name: string;
   color: string;
+  isStudyProject: boolean;
   orderIndex: number;
   createdAt: string;
   updatedAt: string;

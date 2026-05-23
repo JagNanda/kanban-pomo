@@ -8,7 +8,8 @@ import type {
   BreakRecord,
   PomodoroConfig,
   PomodoroPhaseType,
-  TimerState
+  TimerState,
+  WorkTimerMode
 } from "../domain/pomodoro.types";
 import type { TaskId } from "../../tasks/domain/task.types";
 
@@ -16,6 +17,17 @@ type InterruptedTimerState = Extract<
   TimerState,
   { status: "running"; phaseType: "interruption" }
 >["interruptedTimer"];
+type RunningWorkTimerState = Extract<TimerState, { status: "running" }> & {
+  phaseType: "work";
+};
+type PausedWorkTimerState = Extract<TimerState, { status: "paused" }> & {
+  phaseType: "work";
+};
+type ActiveWorkTimerState = RunningWorkTimerState | PausedWorkTimerState;
+
+const isActiveWorkTimerState = (state: TimerState): state is ActiveWorkTimerState =>
+  (state.status === "running" || state.status === "paused") &&
+  state.phaseType === "work";
 
 interface UsePomodoroControllerOptions {
   onWorkSessionCompleted: (
@@ -38,6 +50,18 @@ interface UsePomodoroControllerOptions {
     plannedDurationSeconds: number,
     actualDurationSeconds: number,
     action: BreakRecord["action"],
+    startedAt: string,
+    endedAt: string
+  ) => void;
+  onStudySessionCompleted: (
+    taskId: TaskId,
+    actualDurationSeconds: number,
+    startedAt: string,
+    endedAt: string
+  ) => void;
+  onStudySessionAttempted: (
+    taskId: TaskId,
+    actualDurationSeconds: number,
     startedAt: string,
     endedAt: string
   ) => void;
@@ -90,7 +114,10 @@ const getActualDurationForTimerState = (
   plannedDurationSeconds: number,
   endedAt: string
 ): number => {
-  if (state.phaseType === "procrastination") {
+  if (
+    state.phaseType === "procrastination" ||
+    (state.phaseType === "work" && state.workMode === "study")
+  ) {
     return state.status === "running"
       ? getElapsedSecondsFromStartedAt(state.startedAt, endedAt)
       : state.elapsedSeconds;
@@ -106,17 +133,52 @@ const getActualDurationForTimerState = (
   return plannedDurationSeconds - remainingSeconds;
 };
 
+const captureInterruptedWorkTimer = (current: ActiveWorkTimerState): InterruptedTimerState => {
+  const workMode = current.workMode ?? "pomodoro";
+  const remainingSeconds =
+    workMode === "study"
+      ? 0
+      : current.status === "running" && current.endsAt !== null
+        ? getRemainingSecondsFromEndsAt(current.endsAt)
+        : current.status === "running"
+          ? current.secondsRemaining
+          : current.remainingSeconds;
+  const elapsedSeconds =
+    workMode === "study"
+      ? current.status === "running"
+        ? getElapsedSecondsFromStartedAt(current.startedAt, new Date().toISOString())
+        : current.elapsedSeconds
+      : current.status === "running"
+        ? Math.max(current.plannedDurationSeconds - remainingSeconds, 0)
+        : current.elapsedSeconds;
+
+  return {
+    priorStatus: current.status,
+    taskId: current.taskId,
+    phaseType: "work",
+    plannedDurationSeconds: current.plannedDurationSeconds,
+    remainingSeconds,
+    elapsedSeconds,
+    cycleWorkSessionIndex: current.cycleWorkSessionIndex,
+    startedAt: current.startedAt,
+    workMode
+  };
+};
+
 const restoreInterruptedTimer = (interruptedTimer: InterruptedTimerState): TimerState => {
+  const isStudyTimer = interruptedTimer.workMode === "study";
+
   if (interruptedTimer.priorStatus === "paused") {
     return {
       status: "paused",
       taskId: interruptedTimer.taskId,
       phaseType: "work",
       plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
-      remainingSeconds: interruptedTimer.remainingSeconds,
+      remainingSeconds: isStudyTimer ? 0 : interruptedTimer.remainingSeconds,
       elapsedSeconds: interruptedTimer.elapsedSeconds,
       cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex,
-      startedAt: interruptedTimer.startedAt
+      startedAt: interruptedTimer.startedAt,
+      workMode: interruptedTimer.workMode
     };
   }
 
@@ -124,17 +186,24 @@ const restoreInterruptedTimer = (interruptedTimer: InterruptedTimerState): Timer
     status: "running",
     taskId: interruptedTimer.taskId,
     phaseType: "work",
-    startedAt: interruptedTimer.startedAt,
-    endsAt: new Date(Date.now() + interruptedTimer.remainingSeconds * 1000).toISOString(),
+    startedAt: isStudyTimer
+      ? new Date(Date.now() - interruptedTimer.elapsedSeconds * 1000).toISOString()
+      : interruptedTimer.startedAt,
+    endsAt: isStudyTimer
+      ? null
+      : new Date(Date.now() + interruptedTimer.remainingSeconds * 1000).toISOString(),
     plannedDurationSeconds: interruptedTimer.plannedDurationSeconds,
-    secondsRemaining: interruptedTimer.remainingSeconds,
+    secondsRemaining: isStudyTimer ? 0 : interruptedTimer.remainingSeconds,
     secondsElapsed: interruptedTimer.elapsedSeconds,
-    cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex
+    cycleWorkSessionIndex: interruptedTimer.cycleWorkSessionIndex,
+    workMode: interruptedTimer.workMode
   };
 };
 
 export const usePomodoroController = ({
   onWorkSessionCompleted,
+  onStudySessionCompleted,
+  onStudySessionAttempted,
   onWorkSessionInterrupted,
   onBreakRecorded,
   onProcrastinationRecorded,
@@ -238,6 +307,16 @@ export const usePomodoroController = ({
           };
         }
 
+        if (current.phaseType === "work" && current.workMode === "study") {
+          return {
+            ...current,
+            secondsElapsed: getElapsedSecondsFromStartedAt(
+              current.startedAt,
+              new Date().toISOString()
+            )
+          };
+        }
+
         if (current.endsAt === null) {
           return current;
         }
@@ -300,16 +379,26 @@ export const usePomodoroController = ({
   }, [config, onBreakRecorded, onWorkSessionCompleted, state.status]);
 
   const actions = {
-    startForTask: (taskId: TaskId) => {
+    startForTask: (
+      taskId: TaskId,
+      options: { workMode?: WorkTimerMode } = {}
+    ) => {
       void ensurePomodoroAudioReady();
+      const workMode = options.workMode ?? "pomodoro";
+      const plannedDurationSeconds =
+        workMode === "study" ? 0 : config.workDurationSeconds;
       setState({
         status: "running",
         taskId,
         phaseType: "work",
+        workMode,
         startedAt: new Date().toISOString(),
-        endsAt: new Date(Date.now() + config.workDurationSeconds * 1000).toISOString(),
-        plannedDurationSeconds: config.workDurationSeconds,
-        secondsRemaining: config.workDurationSeconds,
+        endsAt:
+          workMode === "study"
+            ? null
+            : new Date(Date.now() + plannedDurationSeconds * 1000).toISOString(),
+        plannedDurationSeconds,
+        secondsRemaining: plannedDurationSeconds,
         secondsElapsed: 0,
         cycleWorkSessionIndex: 0
       });
@@ -330,37 +419,35 @@ export const usePomodoroController = ({
       });
     },
     startProcrastinatingForTask: (taskId: TaskId) => {
-      setState({
-        status: "running",
-        taskId,
-        phaseType: "procrastination",
-        startedAt: new Date().toISOString(),
-        endsAt: null,
-        plannedDurationSeconds: 0,
-        secondsRemaining: 0,
-        secondsElapsed: 0,
-        cycleWorkSessionIndex: 0
+      setState((current) => {
+        const suspendedTimer =
+          isActiveWorkTimerState(current) &&
+          current.taskId === taskId
+            ? captureInterruptedWorkTimer(current)
+            : undefined;
+
+        return {
+          status: "running",
+          taskId,
+          phaseType: "procrastination",
+          startedAt: new Date().toISOString(),
+          endsAt: null,
+          plannedDurationSeconds: 0,
+          secondsRemaining: 0,
+          secondsElapsed: 0,
+          cycleWorkSessionIndex:
+            suspendedTimer?.cycleWorkSessionIndex ?? 0,
+          ...(suspendedTimer ? { suspendedTimer } : {})
+        };
       });
     },
     startInterruption: () => {
       setState((current) => {
-        if (
-          (current.status !== "running" && current.status !== "paused") ||
-          current.phaseType !== "work"
-        ) {
+        if (!isActiveWorkTimerState(current)) {
           return current;
         }
 
-        const remainingSeconds =
-          current.status === "running" && current.endsAt !== null
-            ? getRemainingSecondsFromEndsAt(current.endsAt)
-            : current.status === "running"
-              ? current.secondsRemaining
-              : current.remainingSeconds;
-        const elapsedSeconds =
-          current.status === "running"
-            ? Math.max(current.plannedDurationSeconds - remainingSeconds, 0)
-            : current.elapsedSeconds;
+        const interruptedTimer = captureInterruptedWorkTimer(current);
 
         return {
           status: "running",
@@ -372,16 +459,7 @@ export const usePomodoroController = ({
           secondsRemaining: 0,
           secondsElapsed: 0,
           cycleWorkSessionIndex: current.cycleWorkSessionIndex,
-          interruptedTimer: {
-            priorStatus: current.status,
-            taskId: current.taskId,
-            phaseType: "work",
-            plannedDurationSeconds: current.plannedDurationSeconds,
-            remainingSeconds,
-            elapsedSeconds,
-            cycleWorkSessionIndex: current.cycleWorkSessionIndex,
-            startedAt: current.startedAt
-          }
+          interruptedTimer
         };
       });
     },
@@ -401,11 +479,15 @@ export const usePomodoroController = ({
               ? 0
               : getRemainingSecondsFromEndsAt(current.endsAt),
           elapsedSeconds:
-            current.phaseType === "procrastination"
+            current.phaseType === "procrastination" || current.workMode === "study"
               ? getElapsedSecondsFromStartedAt(current.startedAt, new Date().toISOString())
               : current.secondsElapsed,
           cycleWorkSessionIndex: current.cycleWorkSessionIndex,
-          startedAt: current.startedAt
+          startedAt: current.startedAt,
+          workMode: current.workMode ?? "pomodoro",
+          ...(current.suspendedTimer
+            ? { suspendedTimer: current.suspendedTimer }
+            : {})
         };
       });
     },
@@ -421,17 +503,21 @@ export const usePomodoroController = ({
           taskId: current.taskId,
           phaseType: current.phaseType,
           startedAt:
-            current.phaseType === "procrastination"
+            current.phaseType === "procrastination" || current.workMode === "study"
               ? new Date(Date.now() - current.elapsedSeconds * 1000).toISOString()
               : current.startedAt,
           endsAt:
-            current.phaseType === "procrastination"
+            current.phaseType === "procrastination" || current.workMode === "study"
               ? null
               : new Date(Date.now() + current.remainingSeconds * 1000).toISOString(),
           plannedDurationSeconds: current.plannedDurationSeconds,
           secondsRemaining: current.remainingSeconds,
           secondsElapsed: current.elapsedSeconds,
-          cycleWorkSessionIndex: current.cycleWorkSessionIndex
+          cycleWorkSessionIndex: current.cycleWorkSessionIndex,
+          workMode: current.workMode ?? "pomodoro",
+          ...(current.suspendedTimer
+            ? { suspendedTimer: current.suspendedTimer }
+            : {})
         };
       });
     },
@@ -448,16 +534,30 @@ export const usePomodoroController = ({
 
         const endedAt = new Date().toISOString();
         const plannedDurationSeconds = current.plannedDurationSeconds;
-        const actualDurationSeconds = Math.min(
-          plannedDurationSeconds,
-          Math.max(getActualDurationForTimerState(current, plannedDurationSeconds, endedAt), 0)
+        const actualDurationSeconds = Math.max(
+          getActualDurationForTimerState(current, plannedDurationSeconds, endedAt),
+          0
         );
         void playPomodoroCompletionChime("work", config.workCompletionChime);
+
+        if (current.workMode === "study") {
+          onStudySessionCompleted(
+            current.taskId,
+            actualDurationSeconds,
+            current.startedAt,
+            endedAt
+          );
+
+          return {
+            status: "idle",
+            taskId: current.taskId
+          };
+        }
 
         onWorkSessionCompleted(
           current.taskId,
           plannedDurationSeconds,
-          actualDurationSeconds,
+          Math.min(plannedDurationSeconds, actualDurationSeconds),
           current.startedAt,
           endedAt
         );
@@ -469,6 +569,35 @@ export const usePomodoroController = ({
         );
       });
     },
+    giveUpStudy: () => {
+      setState((current) => {
+        if (current.status !== "running" && current.status !== "paused") {
+          return current;
+        }
+
+        if (current.phaseType !== "work" || current.workMode !== "study") {
+          return current;
+        }
+
+        const endedAt = new Date().toISOString();
+        const actualDurationSeconds = Math.max(
+          getActualDurationForTimerState(current, current.plannedDurationSeconds, endedAt),
+          0
+        );
+
+        onStudySessionAttempted(
+          current.taskId,
+          actualDurationSeconds,
+          current.startedAt,
+          endedAt
+        );
+
+        return {
+          status: "idle",
+          taskId: current.taskId
+        };
+      });
+    },
     interrupt: () => {
       setState((current) => {
         if (current.status !== "running" && current.status !== "paused") {
@@ -476,6 +605,10 @@ export const usePomodoroController = ({
         }
 
         if (current.phaseType === "procrastination" || current.phaseType === "interruption") {
+          if (current.phaseType === "procrastination" && current.suspendedTimer) {
+            return restoreInterruptedTimer(current.suspendedTimer);
+          }
+
           return {
             status: "idle",
             taskId: current.taskId
@@ -560,6 +693,10 @@ export const usePomodoroController = ({
           return current;
         }
 
+        if (current.phaseType === "procrastination" && current.suspendedTimer) {
+          return restoreInterruptedTimer(current.suspendedTimer);
+        }
+
         return {
           status: "idle",
           taskId: current.taskId
@@ -589,6 +726,10 @@ export const usePomodoroController = ({
           endedAt
         );
 
+        if (current.suspendedTimer) {
+          return restoreInterruptedTimer(current.suspendedTimer);
+        }
+
         return {
           status: "idle",
           taskId: current.taskId
@@ -616,6 +757,27 @@ export const usePomodoroController = ({
         }
 
         const plannedDurationSeconds = current.plannedDurationSeconds;
+
+        if (current.workMode === "study") {
+          if (current.status === "paused") {
+            return {
+              ...current,
+              remainingSeconds: 0,
+              elapsedSeconds: 0,
+              plannedDurationSeconds: 0,
+              startedAt: new Date().toISOString()
+            };
+          }
+
+          return {
+            ...current,
+            startedAt: new Date().toISOString(),
+            endsAt: null,
+            plannedDurationSeconds: 0,
+            secondsRemaining: 0,
+            secondsElapsed: 0
+          };
+        }
 
         if (current.status === "paused") {
           return {

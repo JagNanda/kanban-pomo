@@ -8,6 +8,7 @@ import { OverdueIndicator } from "../../tasks/components/OverdueIndicator";
 import type { Task } from "../../tasks/domain/task.types";
 import { StopwatchIcons } from "../../tasks/components/StopwatchIcons";
 import type {
+  AiWorkRecord,
   BreakRecord,
   InterruptionRecord,
   PomodoroConfig,
@@ -16,11 +17,13 @@ import type {
   TimerState
 } from "../domain/pomodoro.types";
 import { SegmentedTimerRing } from "./SegmentedTimerRing";
+import type { AiTimerState } from "../application/useAiTimerController";
 
 interface PomodoroPanelProps {
   tasksInDev: Task[];
   upcomingDueTasks: Task[];
   timerState: TimerState;
+  aiTimerState: AiTimerState;
   config: PomodoroConfig;
   selectedTask: Task | null;
   allPomodoroSessions: PomodoroSession[];
@@ -31,6 +34,7 @@ interface PomodoroPanelProps {
   breakHistory: BreakRecord[];
   procrastinationHistory: ProcrastinationRecord[];
   interruptionHistory: InterruptionRecord[];
+  aiWorkHistory: AiWorkRecord[];
   onSelectTask: (taskId: Task["id"]) => void;
   onViewAllUpcomingDue: () => void;
   onViewAllRecentActivity: () => void;
@@ -41,6 +45,7 @@ interface PomodoroPanelProps {
   onCompleteTask: (taskId: Task["id"]) => void;
   onConfigChange: (config: PomodoroConfig) => void;
   onFinish: () => void;
+  onGiveUpStudy: () => void;
   onFinishBreak: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -50,15 +55,28 @@ interface PomodoroPanelProps {
   onStopInterruption: (reason: string) => void;
   onCancelInterruption: () => void;
   onReset: () => void;
+  onStartAiTimer: (taskId: Task["id"]) => void;
+  onStopAiTimer: () => void;
+  onPauseAiTimer: () => void;
+  onResumeAiTimer: () => void;
+  onCancelAiTimer: () => void;
 }
 
-const describeTimerState = (timerState: TimerState, config: PomodoroConfig): string => {
+const describeTimerState = (
+  timerState: TimerState,
+  config: PomodoroConfig,
+  selectedTask: Task | null
+): string => {
   if (timerState.status === "idle") {
+    if (selectedTask?.isStudyProblem) {
+      return formatDurationClock(0);
+    }
+
     return formatDurationClock(config.workDurationSeconds);
   }
 
   if (timerState.status === "paused") {
-    if (timerState.phaseType === "procrastination") {
+    if (timerState.phaseType === "procrastination" || timerState.workMode === "study") {
       return formatDurationClock(timerState.elapsedSeconds);
     }
 
@@ -69,11 +87,19 @@ const describeTimerState = (timerState: TimerState, config: PomodoroConfig): str
     return formatDurationClock(timerState.secondsElapsed);
   }
 
+  if (timerState.phaseType === "work" && timerState.workMode === "study") {
+    return formatDurationClock(timerState.secondsElapsed);
+  }
+
   return formatDurationClock(timerState.secondsRemaining);
 };
 
-const getPhaseLabel = (timerState: TimerState): string => {
+const getPhaseLabel = (timerState: TimerState, selectedTask: Task | null): string => {
   if (timerState.status === "idle") {
+    if (selectedTask?.isStudyProblem) {
+      return "Ready to study";
+    }
+
     return "Ready for a focus block";
   }
 
@@ -85,12 +111,25 @@ const getPhaseLabel = (timerState: TimerState): string => {
     return "Interruption";
   }
 
+  if (timerState.phaseType === "work" && timerState.workMode === "study") {
+    return "Study timer";
+  }
+
   return timerState.phaseType.replace("_", " ");
 };
 
+type DisplayTone =
+  | "work"
+  | "short_break"
+  | "long_break"
+  | "procrastination"
+  | "interruption"
+  | "ai_work"
+  | "idle";
+
 const getPhaseTone = (
   timerState: TimerState
-): "work" | "short_break" | "long_break" | "procrastination" | "interruption" | "idle" => {
+): DisplayTone => {
   if (timerState.status === "idle") {
     return "idle";
   }
@@ -104,7 +143,7 @@ const getTimerProgress = (timerState: TimerState, config: PomodoroConfig): numbe
   }
 
   if (timerState.status === "paused") {
-    if (timerState.phaseType === "procrastination") {
+    if (timerState.phaseType === "procrastination" || timerState.workMode === "study") {
       return Math.min(timerState.elapsedSeconds / 3600, 1);
     }
 
@@ -112,6 +151,10 @@ const getTimerProgress = (timerState: TimerState, config: PomodoroConfig): numbe
   }
 
   if (timerState.phaseType === "procrastination" || timerState.phaseType === "interruption") {
+    return Math.min(timerState.secondsElapsed / 3600, 1);
+  }
+
+  if (timerState.phaseType === "work" && timerState.workMode === "study") {
     return Math.min(timerState.secondsElapsed / 3600, 1);
   }
 
@@ -241,12 +284,14 @@ const PomodoroIcon = ({ name }: { name: PomodoroIconName }): JSX.Element => {
 const formatActivityTitle = (value: string): string =>
   value
     .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bAi\b/g, "AI");
 
 export const PomodoroPanel = ({
   tasksInDev,
   upcomingDueTasks,
   timerState,
+  aiTimerState,
   config,
   selectedTask,
   allPomodoroSessions,
@@ -257,6 +302,7 @@ export const PomodoroPanel = ({
   breakHistory,
   procrastinationHistory,
   interruptionHistory,
+  aiWorkHistory,
   onSelectTask,
   onViewAllUpcomingDue,
   onViewAllRecentActivity,
@@ -267,6 +313,7 @@ export const PomodoroPanel = ({
   onCompleteTask,
   onConfigChange,
   onFinish,
+  onGiveUpStudy,
   onFinishBreak,
   onPause,
   onResume,
@@ -275,7 +322,12 @@ export const PomodoroPanel = ({
   onStartInterruption,
   onStopInterruption,
   onCancelInterruption,
-  onReset
+  onReset,
+  onStartAiTimer,
+  onStopAiTimer,
+  onPauseAiTimer,
+  onResumeAiTimer,
+  onCancelAiTimer
 }: PomodoroPanelProps): JSX.Element => {
   const [isProcrastinationNoteOpen, setIsProcrastinationNoteOpen] = useState(false);
   const [procrastinationNote, setProcrastinationNote] = useState("");
@@ -285,8 +337,35 @@ export const PomodoroPanel = ({
   const [breakMinutes, setBreakMinutes] = useState(() =>
     String(Math.floor(config.shortBreakDurationSeconds / 60))
   );
-  const phaseTone = getPhaseTone(timerState);
-  const phaseLabel = getPhaseLabel(timerState);
+  const isAiTimerActive = aiTimerState.status !== "idle";
+  const aiTimerElapsedSeconds =
+    aiTimerState.status === "running"
+      ? aiTimerState.secondsElapsed
+      : aiTimerState.status === "paused"
+        ? aiTimerState.elapsedSeconds
+        : 0;
+  const phaseTone: DisplayTone = isAiTimerActive ? "ai_work" : getPhaseTone(timerState);
+  const isSelectedStudyTask = selectedTask?.isStudyProblem === true;
+  const phaseLabel = isAiTimerActive ? "AI work" : getPhaseLabel(timerState, selectedTask);
+  const timerReadout = isAiTimerActive
+    ? formatDurationClock(aiTimerElapsedSeconds)
+    : describeTimerState(timerState, config, selectedTask);
+  const timerProgress = isAiTimerActive
+    ? Math.min(aiTimerElapsedSeconds / 3600, 1)
+    : getTimerProgress(timerState, config);
+  const timerSubtitle = isAiTimerActive
+    ? aiTimerState.status === "paused"
+      ? "AI timer paused"
+      : "Tracking AI completion time"
+    : timerState.status === "idle"
+      ? isSelectedStudyTask
+        ? "Ready to count study time up from zero"
+        : "Ready to begin a focus block"
+      : timerState.phaseType === "interruption"
+        ? "Tracking time away from focus"
+        : timerState.phaseType === "work" && timerState.workMode === "study"
+          ? "Counting up study time until you finish"
+          : "Track work and breaks from one place";
   const todayFocusSeconds = allPomodoroSessions
     .filter((session) => isToday(session.startedAt))
     .reduce((sum, session) => sum + session.actualDurationSeconds, 0);
@@ -345,6 +424,13 @@ export const PomodoroPanel = ({
       detail: formatDurationClock(record.actualDurationSeconds),
       meta: new Date(record.startedAt).toLocaleTimeString(),
       note: record.reason
+    })),
+    ...aiWorkHistory.map((record) => ({
+      id: record.id,
+      startedAt: record.startedAt,
+      title: "ai work completed",
+      detail: formatDurationClock(record.actualDurationSeconds),
+      meta: new Date(record.startedAt).toLocaleTimeString()
     }))
   ]
     .sort(
@@ -400,11 +486,22 @@ export const PomodoroPanel = ({
     timerState.phaseType === "work"
       ? timerState.taskId
       : null;
+  const isActiveStudyWorkTimer =
+    !isInterruptionActive &&
+    (timerState.status === "running" || timerState.status === "paused") &&
+    timerState.phaseType === "work" &&
+    timerState.workMode === "study";
+  const activeAiTask =
+    aiTimerState.status !== "idle"
+      ? tasksInDev.find((task) => task.id === aiTimerState.taskId) ?? null
+      : null;
+  const isAiTimerForSelectedTask =
+    aiTimerState.status !== "idle" && aiTimerState.taskId === selectedTask?.id;
 
   return (
     <section
       className={`focus-shell focus-shell--${phaseTone}${
-        timerState.status === "paused" ? " is-paused" : ""
+        timerState.status === "paused" || aiTimerState.status === "paused" ? " is-paused" : ""
       }`}
     >
       <div className="focus-primary">
@@ -430,26 +527,82 @@ export const PomodoroPanel = ({
         <div className="focus-timer-stage">
           <div className="focus-ring-wrap">
             <SegmentedTimerRing
-              progress={getTimerProgress(timerState, config)}
+              progress={timerProgress}
               tone={phaseTone}
             />
             <div className="focus-timer-center">
               <span className="timer-phase">{phaseLabel}</span>
               <strong className="timer-readout timer-readout--giant">
-                {describeTimerState(timerState, config)}
+                {timerReadout}
               </strong>
-              <span className="subtle">
-                {timerState.status === "idle"
-                  ? "Ready to begin a focus block"
-                  : timerState.phaseType === "interruption"
-                    ? "Tracking time away from focus"
-                    : "Track work and breaks from one place"}
-              </span>
+              <span className="subtle">{timerSubtitle}</span>
             </div>
           </div>
 
           <div className="timer-actions timer-actions--focus">
-            {isInterruptionActive ? (
+            {aiTimerState.status === "running" ? (
+              <>
+                <button
+                  className="primary-button focus-action-button focus-action-button--finish"
+                  onClick={onStopAiTimer}
+                  type="button"
+                >
+                  <PomodoroIcon name="check" />
+                  Finish AI work
+                </button>
+                <button
+                  aria-label="Pause AI timer"
+                  className="ghost-button focus-action-button focus-action-button--icon-only"
+                  onClick={onPauseAiTimer}
+                  title="Pause AI timer"
+                  type="button"
+                >
+                  <PomodoroIcon name="pause" />
+                </button>
+                <button
+                  aria-label="Cancel AI timer"
+                  className="danger-button focus-action-button focus-action-button--icon-only"
+                  onClick={onCancelAiTimer}
+                  title="Cancel AI timer"
+                  type="button"
+                >
+                  <PomodoroIcon name="x" />
+                </button>
+              </>
+            ) : null}
+
+            {aiTimerState.status === "paused" ? (
+              <>
+                <button
+                  aria-label="Continue AI timer"
+                  className="primary-button focus-action-button focus-action-button--primary focus-action-button--icon-only"
+                  onClick={onResumeAiTimer}
+                  title="Continue AI timer"
+                  type="button"
+                >
+                  <PomodoroIcon name="play" />
+                </button>
+                <button
+                  className="primary-button focus-action-button focus-action-button--finish"
+                  onClick={onStopAiTimer}
+                  type="button"
+                >
+                  <PomodoroIcon name="check" />
+                  Finish AI work
+                </button>
+                <button
+                  aria-label="Cancel AI timer"
+                  className="danger-button focus-action-button focus-action-button--icon-only"
+                  onClick={onCancelAiTimer}
+                  title="Cancel AI timer"
+                  type="button"
+                >
+                  <PomodoroIcon name="x" />
+                </button>
+              </>
+            ) : null}
+
+            {!isAiTimerActive && isInterruptionActive ? (
               <>
                 <button
                   className="primary-button focus-action-button focus-action-button--primary"
@@ -470,7 +623,7 @@ export const PomodoroPanel = ({
               </>
             ) : null}
 
-            {!isInterruptionActive && timerState.status === "idle" && selectedTask ? (
+            {!isAiTimerActive && !isInterruptionActive && timerState.status === "idle" && selectedTask ? (
               <>
                 <button
                   className="primary-button focus-action-button focus-action-button--primary"
@@ -478,7 +631,7 @@ export const PomodoroPanel = ({
                   type="button"
                 >
                   <PomodoroIcon name="play" />
-                  Start focus
+                  {selectedTask.isStudyProblem ? "Start study" : "Start focus"}
                 </button>
                 {canCompleteTask ? (
                   <button
@@ -509,7 +662,18 @@ export const PomodoroPanel = ({
               </>
             ) : null}
 
-            {!isInterruptionActive && timerState.status === "running" ? (
+            {!isAiTimerActive && selectedTask && !selectedTask.isStudyProblem ? (
+              <button
+                className="ghost-button focus-action-button focus-action-button--ai"
+                onClick={() => onStartAiTimer(selectedTask.id)}
+                type="button"
+              >
+                <PomodoroIcon name="timer" />
+                Start AI timer
+              </button>
+            ) : null}
+
+            {!isAiTimerActive && !isInterruptionActive && timerState.status === "running" ? (
               <button
                 aria-label="Pause"
                 className="ghost-button focus-action-button focus-action-button--icon-only"
@@ -521,7 +685,7 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {!isInterruptionActive && timerState.status === "paused" ? (
+            {!isAiTimerActive && !isInterruptionActive && timerState.status === "paused" ? (
               <button
                 aria-label="Continue"
                 className="primary-button focus-action-button focus-action-button--primary focus-action-button--icon-only"
@@ -533,7 +697,8 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {!isInterruptionActive &&
+            {!isAiTimerActive &&
+            !isInterruptionActive &&
             (timerState.status === "running" || timerState.status === "paused") &&
             (timerState.phaseType === "short_break" || timerState.phaseType === "long_break") ? (
               <button
@@ -547,7 +712,8 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {!isInterruptionActive &&
+            {!isAiTimerActive &&
+            !isInterruptionActive &&
             (timerState.status === "running" || timerState.status === "paused") &&
             timerState.phaseType === "procrastination" ? (
               <button
@@ -561,7 +727,7 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {!isInterruptionActive && timerState.status !== "idle" ? (
+            {!isAiTimerActive && !isInterruptionActive && timerState.status !== "idle" ? (
               <button
                 aria-label="Cancel"
                 className="danger-button focus-action-button focus-action-button--icon-only"
@@ -579,7 +745,7 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {!isInterruptionActive && timerState.status !== "idle" ? (
+            {!isAiTimerActive && !isInterruptionActive && timerState.status !== "idle" ? (
               <button
                 aria-label="Reset"
                 className="ghost-button focus-action-button focus-action-button--icon-only"
@@ -591,7 +757,7 @@ export const PomodoroPanel = ({
               </button>
             ) : null}
 
-            {activeWorkTaskId ? (
+            {!isAiTimerActive && activeWorkTaskId ? (
               <>
                 <button
                   className="ghost-button focus-action-button focus-action-button--interruption"
@@ -609,11 +775,25 @@ export const PomodoroPanel = ({
                   <PomodoroIcon name="timer" />
                   Procrastinate
                 </button>
+                {isActiveStudyWorkTimer ? (
+                  <button
+                    className="ghost-button focus-action-button"
+                    onClick={onGiveUpStudy}
+                    type="button"
+                  >
+                    <PomodoroIcon name="x" />
+                    Give up
+                  </button>
+                ) : null}
                 <button
                   aria-label="Finish"
                   className="primary-button focus-action-button focus-action-button--finish focus-action-button--icon-only"
                   onClick={onFinish}
-                  title="Finish"
+                  title={
+                    isActiveStudyWorkTimer
+                      ? "Finish study problem"
+                      : "Finish"
+                  }
                   type="button"
                 >
                   <PomodoroIcon name="check" />
@@ -628,8 +808,12 @@ export const PomodoroPanel = ({
                 <PomodoroIcon name="stopwatch" />
               </span>
               <span>
-                <small>Session length</small>
-                <strong>{Math.floor(config.workDurationSeconds / 60)} min</strong>
+                <small>{isSelectedStudyTask ? "Study timer" : "Session length"}</small>
+                <strong>
+                  {isSelectedStudyTask
+                    ? "0 min"
+                    : `${Math.floor(config.workDurationSeconds / 60)} min`}
+                </strong>
               </span>
             </div>
             <div className="focus-session-card focus-session-card--violet">
@@ -759,6 +943,22 @@ export const PomodoroPanel = ({
                 <span>{selectedTask.isStudyProblem ? "Study time" : "Tracked time"}</span>
                 <strong>{formatDurationSummary(selectedTask.actualTrackedSeconds)}</strong>
               </div>
+              <div className="focus-meta-row">
+                <span>AI time</span>
+                <strong>{formatDurationSummary(selectedTask.aiTrackedSeconds)}</strong>
+              </div>
+              {aiTimerState.status !== "idle" ? (
+                <div className="focus-meta-row">
+                  <span>AI timer</span>
+                  <strong>
+                    {isAiTimerForSelectedTask
+                      ? formatDurationClock(aiTimerElapsedSeconds)
+                      : `${activeAiTask?.title ?? "Another task"} · ${formatDurationClock(
+                          aiTimerElapsedSeconds
+                        )}`}
+                  </strong>
+                </div>
+              ) : null}
               {selectedTask.isStudyProblem ? (
                 <div className="focus-meta-row">
                   <span>Times completed</span>

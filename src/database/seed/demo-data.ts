@@ -3,6 +3,7 @@ import type { BreakRecordRow } from "../models/break-record-row";
 import type { ColumnRow } from "../models/column-row";
 import type { FieldDefinitionRow } from "../models/field-definition-row";
 import type { InterruptionRecordRow } from "../models/interruption-record-row";
+import type { AiWorkRecordRow } from "../models/ai-work-record-row";
 import type { PomodoroSessionRow } from "../models/pomodoro-session-row";
 import type { ProcrastinationRecordRow } from "../models/procrastination-record-row";
 import type { TaskCollectionRow } from "../models/task-collection-row";
@@ -65,6 +66,7 @@ export const demoTaskProjectRows: TaskProjectRow[] = [
     board_id: "board_main",
     name: "Marketing Site",
     color: "#f091c5",
+    is_study_project: 0,
     order_index: 0,
     created_at: createdAt,
     updated_at: createdAt
@@ -74,6 +76,7 @@ export const demoTaskProjectRows: TaskProjectRow[] = [
     board_id: "board_main",
     name: "Desktop App",
     color: "#48c4d9",
+    is_study_project: 0,
     order_index: 1,
     created_at: createdAt,
     updated_at: createdAt
@@ -127,6 +130,7 @@ export const demoTaskRows: TaskRow[] = [
     estimated_completion_date: "2026-03-29",
     estimated_pomodoros: 4,
     actual_tracked_seconds: 5400,
+    ai_tracked_seconds: 0,
     pomodoro_count: 3,
     is_study_problem: 0,
     study_platform: "",
@@ -152,6 +156,7 @@ export const demoTaskRows: TaskRow[] = [
     estimated_completion_date: "2026-03-30",
     estimated_pomodoros: 5,
     actual_tracked_seconds: 1800,
+    ai_tracked_seconds: 0,
     pomodoro_count: 1,
     is_study_problem: 0,
     study_platform: "",
@@ -177,6 +182,7 @@ export const demoTaskRows: TaskRow[] = [
     estimated_completion_date: "2026-03-28",
     estimated_pomodoros: 3,
     actual_tracked_seconds: 3600,
+    ai_tracked_seconds: 0,
     pomodoro_count: 2,
     is_study_problem: 0,
     study_platform: "",
@@ -236,3 +242,5 @@ export const demoBreakRecordRows: BreakRecordRow[] = [
 export const demoProcrastinationRecordRows: ProcrastinationRecordRow[] = [];
 
 export const demoInterruptionRecordRows: InterruptionRecordRow[] = [];
+
+export const demoAiWorkRecordRows: AiWorkRecordRow[] = [];

@@ -5,12 +5,14 @@ export type PomodoroSessionId = Brand<string, "PomodoroSessionId">;
 export type BreakRecordId = Brand<string, "BreakRecordId">;
 export type ProcrastinationRecordId = Brand<string, "ProcrastinationRecordId">;
 export type InterruptionRecordId = Brand<string, "InterruptionRecordId">;
+export type AiWorkRecordId = Brand<string, "AiWorkRecordId">;
 export type PomodoroPhaseType =
   | "work"
   | "short_break"
   | "long_break"
   | "procrastination"
   | "interruption";
+export type WorkTimerMode = "pomodoro" | "study";
 export type PomodoroSessionStatus = "completed" | "interrupted" | "abandoned";
 export type BreakAction = "completed" | "skipped";
 export type PomodoroChimeId =
@@ -70,10 +72,19 @@ export interface InterruptionRecord {
   endedAt: string;
 }
 
+export interface AiWorkRecord {
+  id: AiWorkRecordId;
+  taskId: TaskId;
+  actualDurationSeconds: number;
+  startedAt: string;
+  endedAt: string;
+}
+
 interface InterruptedFocusTimerState {
   priorStatus: "running" | "paused";
   taskId: TaskId;
   phaseType: "work";
+  workMode: WorkTimerMode;
   plannedDurationSeconds: number;
   remainingSeconds: number;
   elapsedSeconds: number;
@@ -96,6 +107,8 @@ export type TimerState =
       secondsRemaining: number;
       secondsElapsed: number;
       cycleWorkSessionIndex: number;
+      workMode?: WorkTimerMode;
+      suspendedTimer?: InterruptedFocusTimerState;
     }
   | {
       status: "paused";
@@ -106,6 +119,8 @@ export type TimerState =
       elapsedSeconds: number;
       cycleWorkSessionIndex: number;
       startedAt: string;
+      workMode?: WorkTimerMode;
+      suspendedTimer?: InterruptedFocusTimerState;
     }
   | {
       status: "running";

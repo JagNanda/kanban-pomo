@@ -21,6 +21,7 @@ export interface ArchivedCompletedTask {
   projectColor: string | null;
   pomodoroCount: number;
   actualTrackedSeconds: number;
+  aiTrackedSeconds: number;
   isStudyProblem: boolean;
   studyPlatform: string;
   studyUrl: string;

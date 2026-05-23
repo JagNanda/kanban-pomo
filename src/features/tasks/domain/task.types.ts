@@ -22,6 +22,7 @@ export interface Task {
   estimatedCompletionDate: string | null;
   estimatedPomodoros: number;
   actualTrackedSeconds: number;
+  aiTrackedSeconds: number;
   pomodoroCount: number;
   isStudyProblem: boolean;
   studyPlatform: string;

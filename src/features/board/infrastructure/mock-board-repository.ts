@@ -4,6 +4,7 @@ import {
   demoColumnRows,
   demoFieldDefinitionRows,
   demoInterruptionRecordRows,
+  demoAiWorkRecordRows,
   demoPomodoroSessionRows,
   demoTaskCollectionRows,
   demoTaskProjectRows,
@@ -20,6 +21,7 @@ import type {
 } from "../../custom-fields/domain/custom-fields.types";
 import type {
   BreakRecord,
+  AiWorkRecord,
   InterruptionRecord,
   PomodoroSession,
   ProcrastinationRecord
@@ -42,11 +44,13 @@ export interface LoadedBoardState {
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
   interruptionRecords: InterruptionRecord[];
+  aiWorkRecords: AiWorkRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
   archivedInterruptionRecords: InterruptionRecord[];
+  archivedAiWorkRecords: AiWorkRecord[];
 }
 
 export const loadMockBoardState = (): LoadedBoardState => ({
@@ -70,6 +74,7 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     boardId: row.board_id as TaskProject["boardId"],
     name: row.name,
     color: row.color,
+    isStudyProject: Boolean(row.is_study_project),
     orderIndex: row.order_index,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -97,6 +102,7 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     estimatedCompletionDate: row.estimated_completion_date,
     estimatedPomodoros: row.estimated_pomodoros,
     actualTrackedSeconds: row.actual_tracked_seconds,
+    aiTrackedSeconds: row.ai_tracked_seconds,
     pomodoroCount: row.pomodoro_count,
     isStudyProblem: Boolean(row.is_study_problem),
     studyPlatform: row.study_platform,
@@ -190,9 +196,17 @@ export const loadMockBoardState = (): LoadedBoardState => ({
     startedAt: row.started_at,
     endedAt: row.ended_at
   })),
+  aiWorkRecords: demoAiWorkRecordRows.map((row) => ({
+    id: row.id as AiWorkRecord["id"],
+    taskId: row.task_id as AiWorkRecord["taskId"],
+    actualDurationSeconds: row.actual_duration_seconds,
+    startedAt: row.started_at,
+    endedAt: row.ended_at
+  })),
   archivedCompletedTasks: [],
   archivedPomodoroSessions: [],
   archivedBreakRecords: [],
   archivedProcrastinationRecords: [],
-  archivedInterruptionRecords: []
+  archivedInterruptionRecords: [],
+  archivedAiWorkRecords: []
 });

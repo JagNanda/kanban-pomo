@@ -11,6 +11,7 @@ import {
 } from "../../tasks/domain/task-deadline";
 import type { Task, TaskId, TaskPriority } from "../../tasks/domain/task.types";
 import type {
+  AiWorkRecord,
   BreakRecord,
   InterruptionRecord,
   PomodoroSession,
@@ -31,6 +32,8 @@ interface ReportPageProps {
   archivedProcrastinationRecords: ProcrastinationRecord[];
   interruptionRecords: InterruptionRecord[];
   archivedInterruptionRecords: InterruptionRecord[];
+  aiWorkRecords: AiWorkRecord[];
+  archivedAiWorkRecords: AiWorkRecord[];
   initialViewMode?: ReportViewMode;
   onOpenTask: (taskId: Task["id"], intentMode: "default" | "completed") => void;
 }
@@ -1039,7 +1042,7 @@ const countInterruptionRecordsInRange = (
 ): number => records.filter((record) => isInDateRange(record.startedAt, range)).length;
 
 const sumRecordsByDay = (
-  records: Array<ProcrastinationRecord | InterruptionRecord>,
+  records: Array<ProcrastinationRecord | InterruptionRecord | AiWorkRecord>,
   range: DateRange
 ): Map<string, number> => {
   const totals = new Map<string, number>();
@@ -1130,7 +1133,7 @@ const getActivityIntensity = (pomodoros: number, maxPomodoros: number): number =
   return 1;
 };
 
-const getProcrastinationIntensity = (minutes: number, maxMinutes: number): number => {
+const getTimedActivityIntensity = (minutes: number, maxMinutes: number): number => {
   if (minutes === 0) {
     return 0;
   }
@@ -1354,6 +1357,8 @@ export const ReportPage = ({
   archivedProcrastinationRecords,
   interruptionRecords,
   archivedInterruptionRecords,
+  aiWorkRecords,
+  archivedAiWorkRecords,
   initialViewMode = "overview",
   onOpenTask
 }: ReportPageProps): JSX.Element => {
@@ -1396,6 +1401,10 @@ export const ReportPage = ({
   const allInterruptionRecords = useMemo(
     () => [...interruptionRecords, ...archivedInterruptionRecords],
     [archivedInterruptionRecords, interruptionRecords]
+  );
+  const allAiWorkRecords = useMemo(
+    () => [...aiWorkRecords, ...archivedAiWorkRecords],
+    [aiWorkRecords, archivedAiWorkRecords]
   );
   const studyProblems = useMemo(
     () => buildStudyProblemItems(tasks, archivedCompletedTasks),
@@ -1974,6 +1983,14 @@ export const ReportPage = ({
     1,
     ...rangeActivityDays.map((day) => interruptionMinutesByDay.get(day.key) ?? 0)
   );
+  const aiMinutesByDay = useMemo(
+    () => sumRecordsByDay(allAiWorkRecords, reportRange),
+    [allAiWorkRecords, reportRange.start, reportRange.endExclusive]
+  );
+  const maxAiMinutes = Math.max(
+    1,
+    ...rangeActivityDays.map((day) => aiMinutesByDay.get(day.key) ?? 0)
+  );
   const insights = buildInsights(
     trendData,
     monthSessions,
@@ -2049,23 +2066,34 @@ export const ReportPage = ({
   };
   const renderActivityCalendar = (
     monthData: CalendarMonthData,
-    metric: "focus" | "procrastination" | "interruption"
+    metric: "focus" | "ai" | "procrastination" | "interruption"
   ): JSX.Element => {
     const title =
-      metric === "focus" ? "Focus" : metric === "procrastination" ? "Procrastination" : "Interruptions";
-    const metricCalendarClass =
-      metric === "focus" ? "" : ` report-month-activity-calendar--${metric}`;
+      metric === "focus"
+        ? "Focus"
+        : metric === "ai"
+          ? "AI Time"
+          : metric === "procrastination"
+            ? "Procrastination"
+            : "Interruptions";
+    const metricCalendarClass = ` report-month-activity-calendar--${metric}`;
     const metricDayClass =
       metric === "focus" ? "" : ` report-month-activity-day--${metric}`;
     const maxValue =
       metric === "focus"
         ? maxPomodoros
+        : metric === "ai"
+          ? maxAiMinutes
         : metric === "procrastination"
           ? maxProcrastinationMinutes
           : maxInterruptionMinutes;
     const getValue = (day: CalendarDayData): number => {
       if (metric === "focus") {
         return day.completedPomodoros;
+      }
+
+      if (metric === "ai") {
+        return aiMinutesByDay.get(day.key) ?? 0;
       }
 
       return metric === "procrastination"
@@ -2090,7 +2118,7 @@ export const ReportPage = ({
               const intensity = isSelectableActivityDay
                 ? metric === "focus"
                   ? getActivityIntensity(value, maxValue)
-                  : getProcrastinationIntensity(value, maxValue)
+                  : getTimedActivityIntensity(value, maxValue)
                 : "outside";
 
               return (
@@ -2847,7 +2875,6 @@ export const ReportPage = ({
                 <div className="report-section-header">
                   <div>
                     <h2>Activity Calendar</h2>
-                    <p>Daily intensity for focus, procrastination, and interruptions.</p>
                   </div>
                 </div>
                 <div className="report-activity-month">
@@ -2872,24 +2899,6 @@ export const ReportPage = ({
               </div>
 
               <div className="report-activity-body">
-                <div className="report-activity-legend">
-                  {[
-                    ["High activity", 3],
-                    ["Medium activity", 2],
-                    ["Low activity", 1],
-                    ["No activity", 0]
-                  ].map(([label, intensity]) => (
-                    <span className={`report-activity-legend-item intensity-${intensity}`} key={String(label)}>
-                      <span className="report-activity-legend-swatches" aria-hidden="true">
-                        <i className="report-activity-legend-dot report-activity-legend-dot--focus" />
-                        <i className="report-activity-legend-dot report-activity-legend-dot--procrastination" />
-                        <i className="report-activity-legend-dot report-activity-legend-dot--interruption" />
-                      </span>
-                      {label}
-                    </span>
-                  ))}
-                </div>
-
                 <div
                   className={[
                     "report-activity-calendars",
@@ -2909,6 +2918,7 @@ export const ReportPage = ({
                       ) : null}
                       <div className="report-activity-range-month-calendars">
                         {renderActivityCalendar(monthData, "focus")}
+                        {renderActivityCalendar(monthData, "ai")}
                         {renderActivityCalendar(monthData, "procrastination")}
                         {renderActivityCalendar(monthData, "interruption")}
                       </div>

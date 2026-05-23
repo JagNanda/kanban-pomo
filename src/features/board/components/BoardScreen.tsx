@@ -20,7 +20,7 @@ interface BoardScreenProps {
   state: BoardViewState;
   actions: {
     selectTask: (taskId: TaskId) => void;
-    createTaskProject: (name: string) => void;
+    createTaskProject: (name: string, isStudyProject?: boolean) => void;
     createTaskCollection: (name: string, taskProjectId: TaskProjectId) => void;
     addColumn: () => void;
     deleteColumn: (columnId: ColumnId) => void;
@@ -288,21 +288,52 @@ export const BoardScreen = ({
     () => new Map(state.taskCollections.map((collection) => [collection.id, collection])),
     [state.taskCollections]
   );
+  const studyProjectIds = useMemo(
+    () =>
+      new Set(
+        state.taskProjects
+          .filter((project) => project.isStudyProject)
+          .map((project) => project.id)
+      ),
+    [state.taskProjects]
+  );
+  const boardTaskProjects = useMemo(
+    () => sortedTaskProjects.filter((project) => !project.isStudyProject),
+    [sortedTaskProjects]
+  );
+  const boardVisibleTasks = useMemo(
+    () =>
+      state.tasks.filter((task) => {
+        if (task.taskProjectId && studyProjectIds.has(task.taskProjectId)) {
+          return false;
+        }
+
+        if (!task.taskCollectionId) {
+          return true;
+        }
+
+        const collectionProjectId =
+          taskCollectionsById.get(task.taskCollectionId)?.taskProjectId ?? null;
+
+        return collectionProjectId === null || !studyProjectIds.has(collectionProjectId);
+      }),
+    [state.tasks, studyProjectIds, taskCollectionsById]
+  );
   const activeProjectFilter =
     selectedProjectId === "all" ||
-    sortedTaskProjects.some((project) => project.id === selectedProjectId)
+    boardTaskProjects.some((project) => project.id === selectedProjectId)
       ? selectedProjectId
       : "all";
   const selectedProject =
     activeProjectFilter === "all"
       ? null
-      : sortedTaskProjects.find((project) => project.id === activeProjectFilter) ?? null;
+      : boardTaskProjects.find((project) => project.id === activeProjectFilter) ?? null;
   const filteredTasks = useMemo(() => {
     if (activeProjectFilter === "all") {
-      return state.tasks;
+      return boardVisibleTasks;
     }
 
-    return state.tasks.filter((task) => {
+    return boardVisibleTasks.filter((task) => {
       if (task.taskProjectId === activeProjectFilter) {
         return true;
       }
@@ -313,7 +344,7 @@ export const BoardScreen = ({
 
       return taskCollectionsById.get(task.taskCollectionId)?.taskProjectId === activeProjectFilter;
     });
-  }, [activeProjectFilter, state.tasks, taskCollectionsById]);
+  }, [activeProjectFilter, boardVisibleTasks, taskCollectionsById]);
   const todaySummary = useMemo(
     () =>
       getTodaySummary({
@@ -334,12 +365,25 @@ export const BoardScreen = ({
   const boardLayoutStyle = {
     "--board-column-count": String(Math.max(sortedColumns.length, 1))
   } as CSSProperties;
-  const availableDraftProjects = state.taskProjects.filter((project) =>
+  const availableDraftProjects = boardTaskProjects.filter((project) =>
     state.taskCollections.some((collection) => collection.taskProjectId === project.id)
   );
-  const availableDraftCollections = state.taskCollections.filter(
-    (collection) => collection.taskProjectId === draft.taskProjectId
+  const availableDraftProjectIds = new Set(
+    availableDraftProjects.map((project) => project.id)
   );
+  const availableDraftCollections = availableDraftProjectIds.has(
+    draft.taskProjectId as TaskProjectId
+  )
+    ? state.taskCollections.filter(
+        (collection) => collection.taskProjectId === draft.taskProjectId
+      )
+    : [];
+  const canCreateDraftTask =
+    Boolean(draft.columnId && draft.taskProjectId && draft.taskCollectionId) &&
+    availableDraftProjectIds.has(draft.taskProjectId as TaskProjectId) &&
+    availableDraftCollections.some(
+      (collection) => collection.id === draft.taskCollectionId
+    );
 
   const openCreateTaskModal = (
     columnId: ColumnId | "" = state.columns[0]?.id ?? ""
@@ -408,17 +452,21 @@ export const BoardScreen = ({
   };
 
   const handleCreateTask = (): void => {
-    if (!draft.columnId || !draft.taskProjectId || !draft.taskCollectionId) {
+    if (!canCreateDraftTask) {
       return;
     }
 
+    const columnId = draft.columnId as ColumnId;
+    const taskProjectId = draft.taskProjectId as TaskProjectId;
+    const taskCollectionId = draft.taskCollectionId as TaskCollectionId;
+
     actions.createTask({
-      columnId: draft.columnId,
+      columnId,
       title: draft.title,
       description: draft.description,
       priority: draft.priority,
-      taskProjectId: draft.taskProjectId,
-      taskCollectionId: draft.taskCollectionId,
+      taskProjectId,
+      taskCollectionId,
       estimatedCompletionDate: draft.estimatedCompletionDate || null,
       estimatedPomodoros:
         draft.estimatedPomodoros.trim() === ""
@@ -538,7 +586,7 @@ export const BoardScreen = ({
               }
             >
               <option value="all">All projects</option>
-              {sortedTaskProjects.map((project) => (
+              {boardTaskProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
                 </option>
@@ -629,6 +677,13 @@ export const BoardScreen = ({
                 </div>
 
                 <div className="task-details-form">
+                  {availableDraftProjects.length === 0 ? (
+                    <p className="subtle">
+                      Add a non-study project with at least one collection before creating
+                      Kanban tasks here. Study Projects live in Tasks and Focus instead.
+                    </p>
+                  ) : null}
+
                   <label className="label-stack">
                     <span>Column</span>
                     <select
@@ -928,7 +983,7 @@ export const BoardScreen = ({
                   </button>
                   <button
                     className="primary-button"
-                    disabled={!draft.columnId || !draft.taskProjectId || !draft.taskCollectionId}
+                    disabled={!canCreateDraftTask}
                     onClick={handleCreateTask}
                     type="button"
                   >

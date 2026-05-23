@@ -6,6 +6,7 @@ import type {
   TaskFieldValue
 } from "../../features/custom-fields/domain/custom-fields.types";
 import type {
+  AiWorkRecord,
   BreakRecord,
   InterruptionRecord,
   PomodoroConfig,
@@ -30,11 +31,13 @@ export interface BoardSnapshot {
   breakRecords: BreakRecord[];
   procrastinationRecords: ProcrastinationRecord[];
   interruptionRecords: InterruptionRecord[];
+  aiWorkRecords: AiWorkRecord[];
   archivedCompletedTasks: ArchivedCompletedTask[];
   archivedPomodoroSessions: PomodoroSession[];
   archivedBreakRecords: BreakRecord[];
   archivedProcrastinationRecords: ProcrastinationRecord[];
   archivedInterruptionRecords: InterruptionRecord[];
+  archivedAiWorkRecords: AiWorkRecord[];
 }
 
 export interface AppSettingsSnapshot {
